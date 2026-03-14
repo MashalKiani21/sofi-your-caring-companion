@@ -1,0 +1,9 @@
+{
+  "appId": "app.lovable.46dcda9348234197a1b049616ed2c1b0",
+  "appName": "SOFI - Smart Oversight for Independent Living",
+  "webDir": "dist",
+  "server": {
+    "url": "https://46dcda93-4823-4197-a1b0-49616ed2c1b0.lovableproject.com?forceHideBadge=true",
+    "cleartext": true
+  }
+}
