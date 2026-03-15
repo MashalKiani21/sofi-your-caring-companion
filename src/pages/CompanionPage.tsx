@@ -178,7 +178,10 @@ const CompanionPage = () => {
             >
               <h2 className="text-lg font-bold text-foreground mb-6">{t("Menu", "مینو")}</h2>
               {[
-                { label: t("Dashboard", "ڈیش بورڈ"), path: "/health-dashboard" },
+                { label: t("Home", "ہوم"), path: "/home" },
+                { label: t("Health", "صحت"), path: "/health-dashboard" },
+                { label: t("Emergency", "ایمرجنسی"), path: "/emergency" },
+                { label: t("Navigation", "نقشہ"), path: "/navigation" },
                 { label: t("Reminders", "یاد دہانیاں"), path: "/reminders" },
                 { label: t("Notes", "نوٹس"), path: "/notes" },
                 { label: t("Contacts", "رابطے"), path: "/contacts" },
