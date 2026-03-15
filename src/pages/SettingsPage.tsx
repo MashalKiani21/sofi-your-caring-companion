@@ -1,13 +1,20 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowLeft, Globe, Type, Sun, Volume2, Mic, LogOut, User, Shield } from "lucide-react";
+import {
+  ArrowLeft, Globe, Type, Sun, Volume2, Mic, MicOff, LogOut, User, Shield, Navigation
+} from "lucide-react";
 import { toast } from "sonner";
 
 const SettingsPage = () => {
   const navigate = useNavigate();
-  const { t, language, setLanguage, fontSize, setFontSize, highContrast, setHighContrast, voiceSpeed, setVoiceSpeed, speak, disabilityType } = useAccessibility();
+  const {
+    t, language, setLanguage, fontSize, setFontSize, highContrast, setHighContrast,
+    voiceSpeed, setVoiceSpeed, voiceGender, setVoiceGender, speak, disabilityType, mode, setMode
+  } = useAccessibility();
   const { signOut } = useAuth();
+  const [privacyMode, setPrivacyMode] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
@@ -15,10 +22,46 @@ const SettingsPage = () => {
     navigate("/");
   };
 
+  const togglePrivacyMode = () => {
+    setPrivacyMode(!privacyMode);
+    toast.info(privacyMode
+      ? t("Microphone enabled", "مائیکروفون فعال")
+      : t("Microphone disabled for privacy", "رازداری کے لیے مائیکروفون بند"));
+  };
+
+  const ToggleSwitch = ({ active, onToggle }: { active: boolean; onToggle: () => void }) => (
+    <button
+      onClick={onToggle}
+      className={`w-14 h-8 rounded-full transition-colors relative ${active ? "bg-primary" : "bg-border"}`}
+      role="switch"
+      aria-checked={active}
+    >
+      <div className={`w-6 h-6 rounded-full bg-primary-foreground absolute top-1 transition-all ${active ? "left-7" : "left-1"}`} />
+    </button>
+  );
+
+  const OptionGrid = ({ options, value, onChange, labels }: {
+    options: readonly string[]; value: string; onChange: (v: any) => void; labels?: Record<string, string>;
+  }) => (
+    <div className={`grid grid-cols-${options.length} gap-2`}>
+      {options.map(opt => (
+        <button
+          key={opt}
+          onClick={() => onChange(opt)}
+          className={`min-h-touch rounded-xl text-sm font-medium capitalize transition-colors ${
+            value === opt ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
+          }`}
+        >
+          {labels?.[opt] || opt}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="flex items-center gap-3 px-4 py-3 border-b border-border">
-        <button onClick={() => navigate("/companion")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
+        <button onClick={() => navigate("/home")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
           <ArrowLeft className="w-5 h-5 text-foreground" />
         </button>
         <h1 className="text-xl font-bold text-foreground">{t("Settings", "ترتیبات")}</h1>
@@ -73,12 +116,7 @@ const SettingsPage = () => {
             <Sun className="w-5 h-5 text-primary" />
             <p className="font-semibold text-foreground">{t("High Contrast", "زیادہ کنٹراسٹ")}</p>
           </div>
-          <button
-            onClick={() => setHighContrast(!highContrast)}
-            className={`w-14 h-8 rounded-full transition-colors relative ${highContrast ? "bg-primary" : "bg-border"}`}
-          >
-            <div className={`w-6 h-6 rounded-full bg-primary-foreground absolute top-1 transition-all ${highContrast ? "left-7" : "left-1"}`} />
-          </button>
+          <ToggleSwitch active={highContrast} onToggle={() => setHighContrast(!highContrast)} />
         </div>
 
         {/* Voice Speed */}
@@ -102,20 +140,64 @@ const SettingsPage = () => {
           </div>
         </div>
 
-        {/* Profile info */}
+        {/* Voice Gender */}
+        <div className="p-4 rounded-2xl bg-card shadow-card">
+          <div className="flex items-center gap-3 mb-3">
+            <User className="w-5 h-5 text-primary" />
+            <p className="font-semibold text-foreground">{t("Assistant Voice", "معاون کی آواز")}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {(["female", "male"] as const).map(g => (
+              <button
+                key={g}
+                onClick={() => setVoiceGender(g)}
+                className={`min-h-touch rounded-xl text-sm font-medium capitalize transition-colors ${
+                  voiceGender === g ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
+                }`}
+              >
+                {t(g, g === "female" ? "خاتون" : "مرد")}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Voice-only Navigation */}
+        <div className="p-4 rounded-2xl bg-card shadow-card flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Navigation className="w-5 h-5 text-primary" />
+            <div>
+              <p className="font-semibold text-foreground">{t("Voice-Only Mode", "صرف آواز موڈ")}</p>
+              <p className="text-xs text-muted-foreground">{t("Navigate entirely by voice", "مکمل آواز سے چلائیں")}</p>
+            </div>
+          </div>
+          <ToggleSwitch
+            active={mode === "voice-only"}
+            onToggle={() => setMode(mode === "voice-only" ? "standard" : "voice-only")}
+          />
+        </div>
+
+        {/* Privacy Mode */}
+        <div className="p-4 rounded-2xl bg-card shadow-card flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {privacyMode ? <MicOff className="w-5 h-5 text-emergency" /> : <Mic className="w-5 h-5 text-primary" />}
+            <div>
+              <p className="font-semibold text-foreground">{t("Privacy Mode", "رازداری موڈ")}</p>
+              <p className="text-xs text-muted-foreground">{t("Disable microphone temporarily", "مائیکروفون عارضی طور پر بند")}</p>
+            </div>
+          </div>
+          <ToggleSwitch active={privacyMode} onToggle={togglePrivacyMode} />
+        </div>
+
+        {/* Profile */}
         <div className="p-4 rounded-2xl bg-card shadow-card">
           <div className="flex items-center gap-3 mb-2">
-            <User className="w-5 h-5 text-primary" />
+            <Shield className="w-5 h-5 text-primary" />
             <p className="font-semibold text-foreground">{t("Profile", "پروفائل")}</p>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Shield className="w-4 h-4" />
             <span>{t("Disability:", "معذوری:")} <span className="capitalize text-foreground">{disabilityType}</span></span>
           </div>
-          <button
-            onClick={() => navigate("/profile-setup")}
-            className="mt-3 text-sm text-primary font-medium hover:underline"
-          >
+          <button onClick={() => navigate("/profile-setup")} className="mt-3 text-sm text-primary font-medium hover:underline">
             {t("Update profile →", "پروفائل اپ ڈیٹ کریں →")}
           </button>
         </div>

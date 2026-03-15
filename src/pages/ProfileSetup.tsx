@@ -66,7 +66,7 @@ const ProfileSetup = () => {
       "پروفائل سیٹ اپ مکمل! آپ کے ساتھی کی طرف لے جا رہے ہیں۔"
     ));
     toast.success(t("Profile setup complete!", "پروفائل سیٹ اپ مکمل!"));
-    navigate("/companion");
+    navigate("/home");
   };
 
   return (
