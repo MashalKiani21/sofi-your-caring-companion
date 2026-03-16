@@ -1,85 +1,175 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
-import { ArrowLeft, Phone, MessageSquare, Search, Plus, User } from "lucide-react";
-import { motion } from "framer-motion";
-
-interface Contact {
-  id: string;
-  name: string;
-  phone: string;
-  relationship: string;
-}
-
-const mockContacts: Contact[] = [
-  { id: "1", name: "Ahmed (Son)", phone: "+92 300 1234567", relationship: "Son" },
-  { id: "2", name: "Dr. Fatima", phone: "+92 321 7654321", relationship: "Doctor" },
-  { id: "3", name: "Khalid (Neighbor)", phone: "+92 333 9876543", relationship: "Neighbor" },
-  { id: "4", name: "Sara (Daughter)", phone: "+92 312 4567890", relationship: "Daughter" },
-  { id: "5", name: "Rescue 1122", phone: "1122", relationship: "Emergency" },
-];
+import { useAuth } from "@/contexts/AuthContext";
+import { ContactService, type Contact } from "@/services/ContactService";
+import { MessagingService } from "@/services/MessagingService";
+import { ArrowLeft, Phone, MessageSquare, Search, Plus, User, Trash2, X, Mic, MicOff } from "lucide-react";
+import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
 const ContactsPage = () => {
   const navigate = useNavigate();
-  const { t } = useAccessibility();
+  const { t, speak, language, disabilityType } = useAccessibility();
+  const { user } = useAuth();
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState("");
-  const filtered = mockContacts.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)
-  );
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newRelation, setNewRelation] = useState("");
+
+  const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
+    language,
+    onResult: (text) => setSearch(text),
+  });
+
+  useEffect(() => {
+    if (user) loadContacts();
+  }, [user]);
+
+  const loadContacts = async () => {
+    try {
+      const data = await ContactService.getContacts(user!.id);
+      setContacts(data);
+    } catch (err) {
+      toast.error(t("Failed to load contacts", "رابطے لوڈ نہیں ہوئے"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addContact = async () => {
+    if (!newName || !newPhone || !user) return;
+    try {
+      await ContactService.addContact(user.id, { name: newName, phone: newPhone, relationship: newRelation || "Other" });
+      await loadContacts();
+      setNewName(""); setNewPhone(""); setNewRelation(""); setShowAdd(false);
+      speak(t("Contact added!", "رابطہ شامل!"));
+      toast.success(t("Contact added", "رابطہ شامل"));
+    } catch (err) {
+      toast.error(t("Failed to add contact", "رابطہ شامل نہیں ہوا"));
+    }
+  };
+
+  const deleteContact = async (id: string) => {
+    try {
+      await ContactService.deleteContact(id);
+      setContacts((c) => c.filter((x) => x.id !== id));
+      toast.success(t("Contact deleted", "رابطہ حذف"));
+    } catch (err) {
+      toast.error(t("Delete failed", "حذف ناکام"));
+    }
+  };
+
+  const handleCall = (contact: Contact) => {
+    speak(t(`Calling ${contact.name}`, `${contact.name} کو کال کر رہے ہیں`));
+    ContactService.makeCall(contact.phone);
+  };
+
+  const handleMessage = (contact: Contact) => {
+    speak(t(`Messaging ${contact.name}`, `${contact.name} کو پیغام`));
+    MessagingService.sendSMS(contact.phone, "");
+  };
+
+  const filtered = ContactService.searchContacts(contacts, search);
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background pb-20">
       <header className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/companion")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
+          <button onClick={() => navigate("/home")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
           <h1 className="text-xl font-bold text-foreground">{t("Contacts", "رابطے")}</h1>
         </div>
-        <button className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Plus className="w-5 h-5" />
+        <button onClick={() => setShowAdd(!showAdd)} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          {showAdd ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
         </button>
       </header>
 
       <div className="px-4 py-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("Search contacts...", "رابطے تلاش کریں...")}
-            className="w-full min-h-touch pl-11 pr-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
+        <div className="flex gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("Search contacts...", "رابطے تلاش کریں...")}
+              className="w-full min-h-touch pl-11 pr-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <button
+            onClick={() => isListening ? stopListening() : startListening()}
+            disabled={!isSupported}
+            className={`min-h-touch min-w-touch rounded-2xl flex items-center justify-center transition-colors ${
+              isListening ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
+            } disabled:opacity-30`}
+          >
+            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 space-y-2">
-        {filtered.map((contact, i) => (
-          <motion.div
-            key={contact.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.03 }}
-            className="p-4 rounded-2xl bg-card shadow-card flex items-center gap-4"
-          >
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <User className="w-6 h-6 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-foreground truncate">{contact.name}</p>
-              <p className="text-sm text-muted-foreground">{contact.phone}</p>
-              <p className="text-xs text-muted-foreground">{contact.relationship}</p>
-            </div>
-            <div className="flex gap-2">
-              <button className="min-h-touch min-w-touch rounded-xl bg-success/10 flex items-center justify-center" aria-label={`Call ${contact.name}`}>
-                <Phone className="w-5 h-5 text-success" />
+        <AnimatePresence>
+          {showAdd && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="p-4 rounded-2xl bg-card shadow-card space-y-3 mb-2">
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("Name", "نام")}
+                className="w-full min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder={t("Phone number", "فون نمبر")} type="tel"
+                className="w-full min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input value={newRelation} onChange={(e) => setNewRelation(e.target.value)} placeholder={t("Relationship (Son, Doctor...)", "رشتہ (بیٹا، ڈاکٹر...)")}
+                className="w-full min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+              <button onClick={addContact} disabled={!newName || !newPhone} className="w-full min-h-touch bg-primary text-primary-foreground rounded-2xl font-semibold disabled:opacity-50">
+                {t("Add Contact", "رابطہ شامل کریں")}
               </button>
-              <button className="min-h-touch min-w-touch rounded-xl bg-primary/10 flex items-center justify-center" aria-label={`Message ${contact.name}`}>
-                <MessageSquare className="w-5 h-5 text-primary" />
-              </button>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12">
+            <User className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-muted-foreground">{search ? t("No contacts match", "کوئی رابطہ نہیں ملا") : t("No contacts yet", "ابھی کوئی رابطہ نہیں")}</p>
+          </div>
+        ) : (
+          filtered.map((contact, i) => (
+            <motion.div
+              key={contact.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03 }}
+              className="p-4 rounded-2xl bg-card shadow-card flex items-center gap-4"
+            >
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <User className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-foreground truncate">{contact.name}</p>
+                <p className="text-sm text-muted-foreground">{contact.phone}</p>
+                <p className="text-xs text-muted-foreground">{contact.relationship}</p>
+              </div>
+              <div className="flex gap-1.5">
+                <button onClick={() => handleCall(contact)} className="min-h-touch min-w-touch rounded-xl bg-success/10 flex items-center justify-center" aria-label={`Call ${contact.name}`}>
+                  <Phone className="w-5 h-5 text-success" />
+                </button>
+                <button onClick={() => handleMessage(contact)} className="min-h-touch min-w-touch rounded-xl bg-primary/10 flex items-center justify-center" aria-label={`Message ${contact.name}`}>
+                  <MessageSquare className="w-5 h-5 text-primary" />
+                </button>
+                <button onClick={() => deleteContact(contact.id)} className="min-h-touch min-w-touch rounded-xl hover:bg-destructive/10 flex items-center justify-center" aria-label={`Delete ${contact.name}`}>
+                  <Trash2 className="w-4 h-4 text-destructive" />
+                </button>
+              </div>
+            </motion.div>
+          ))
+        )}
       </div>
     </div>
   );

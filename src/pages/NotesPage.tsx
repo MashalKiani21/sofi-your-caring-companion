@@ -1,97 +1,213 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
-import { ArrowLeft, Plus, Trash2, Edit, Save } from "lucide-react";
-import { motion } from "framer-motion";
-import type { Note } from "@/types/app";
+import { useAuth } from "@/contexts/AuthContext";
+import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { supabase } from "@/integrations/supabase/client";
+import { ArrowLeft, Plus, Trash2, Edit, Save, Mic, MicOff, X, FileText } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
-const mockNotes: Note[] = [
-  { id: "1", user_id: "1", title: "Shopping list", content: "Milk, bread, eggs, fruits", created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: "2", user_id: "1", title: "Doctor's instructions", content: "Take medicine after meals. Walk 30 min daily.", created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-];
+interface NoteData {
+  id: string;
+  title: string;
+  content: string | null;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
 
 const NotesPage = () => {
   const navigate = useNavigate();
-  const { t } = useAccessibility();
-  const [notes, setNotes] = useState<Note[]>(mockNotes);
+  const { t, speak, language } = useAccessibility();
+  const { user } = useAuth();
+  const [notes, setNotes] = useState<NoteData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
+  const [voiceTarget, setVoiceTarget] = useState<"title" | "content" | null>(null);
 
-  const addNote = () => {
-    if (!newTitle) return;
-    setNotes([...notes, {
-      id: Date.now().toString(), user_id: "1", title: newTitle, content: newContent,
-      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    }]);
-    setNewTitle("");
-    setNewContent("");
-    setShowAdd(false);
+  const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
+    language,
+    onResult: (text) => {
+      if (voiceTarget === "title") {
+        setNewTitle(text);
+      } else if (voiceTarget === "content") {
+        setNewContent((prev) => (prev ? prev + " " + text : text));
+      } else {
+        // Default: create new note from voice
+        setNewTitle(text.slice(0, 50));
+        setNewContent(text);
+        setShowAdd(true);
+      }
+      setVoiceTarget(null);
+    },
+  });
+
+  useEffect(() => {
+    if (user) loadNotes();
+  }, [user]);
+
+  const loadNotes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .eq("user_id", user!.id)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      setNotes(data || []);
+    } catch (err) {
+      toast.error(t("Failed to load notes", "نوٹس لوڈ نہیں ہوئے"));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const saveEdit = (id: string) => {
-    setNotes(n => n.map(note => note.id === id ? { ...note, content: editContent, updated_at: new Date().toISOString() } : note));
-    setEditing(null);
+  const addNote = async () => {
+    if (!newTitle || !user) return;
+    try {
+      const { error } = await supabase.from("notes").insert({
+        title: newTitle,
+        content: newContent,
+        user_id: user.id,
+      });
+      if (error) throw error;
+      await loadNotes();
+      setNewTitle("");
+      setNewContent("");
+      setShowAdd(false);
+      speak(t("Note saved!", "نوٹ محفوظ!"));
+      toast.success(t("Note saved", "نوٹ محفوظ"));
+    } catch (err) {
+      toast.error(t("Failed to save note", "نوٹ محفوظ نہیں ہوا"));
+    }
+  };
+
+  const saveEdit = async (id: string) => {
+    try {
+      const { error } = await supabase.from("notes").update({ content: editContent }).eq("id", id);
+      if (error) throw error;
+      setNotes((n) => n.map((note) => (note.id === id ? { ...note, content: editContent, updated_at: new Date().toISOString() } : note)));
+      setEditing(null);
+      toast.success(t("Note updated", "نوٹ اپ ڈیٹ"));
+    } catch (err) {
+      toast.error(t("Update failed", "اپ ڈیٹ ناکام"));
+    }
+  };
+
+  const deleteNote = async (id: string) => {
+    try {
+      const { error } = await supabase.from("notes").delete().eq("id", id);
+      if (error) throw error;
+      setNotes((n) => n.filter((x) => x.id !== id));
+      toast.success(t("Note deleted", "نوٹ حذف"));
+    } catch (err) {
+      toast.error(t("Delete failed", "حذف ناکام"));
+    }
+  };
+
+  const startVoiceFor = (target: "title" | "content") => {
+    setVoiceTarget(target);
+    startListening();
+    speak(t(`Speak your ${target}`, `اپنا ${target} بولیں`));
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background pb-20">
       <header className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/companion")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
+          <button onClick={() => navigate("/home")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
           <h1 className="text-xl font-bold text-foreground">{t("Notes", "نوٹس")}</h1>
         </div>
-        <button onClick={() => setShowAdd(!showAdd)} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Plus className="w-5 h-5" />
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setVoiceTarget(null); isListening ? stopListening() : startListening(); }}
+            disabled={!isSupported}
+            className={`min-h-touch min-w-touch rounded-xl flex items-center justify-center transition-colors ${
+              isListening ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
+            } disabled:opacity-30`}
+            aria-label={t("Voice note", "آواز نوٹ")}
+          >
+            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
+          <button onClick={() => setShowAdd(!showAdd)} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            {showAdd ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {showAdd && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-2xl bg-card shadow-card space-y-3">
-            <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={t("Title...", "عنوان...")}
-              className="w-full min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
-            <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} placeholder={t("Content...", "مواد...")}
-              className="w-full min-h-[100px] px-4 py-3 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
-            <button onClick={addNote} className="w-full min-h-touch bg-primary text-primary-foreground rounded-2xl font-semibold">
-              {t("Save Note", "نوٹ محفوظ کریں")}
-            </button>
-          </motion.div>
-        )}
+        <AnimatePresence>
+          {showAdd && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="p-4 rounded-2xl bg-card shadow-card space-y-3">
+              <div className="flex gap-2">
+                <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={t("Title...", "عنوان...")}
+                  className="flex-1 min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+                <button onClick={() => startVoiceFor("title")} disabled={!isSupported}
+                  className="min-h-touch min-w-touch rounded-xl bg-secondary flex items-center justify-center disabled:opacity-30">
+                  <Mic className="w-4 h-4 text-foreground" />
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} placeholder={t("Content...", "مواد...")}
+                  className="flex-1 min-h-[100px] px-4 py-3 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+                <button onClick={() => startVoiceFor("content")} disabled={!isSupported}
+                  className="min-h-touch min-w-touch rounded-xl bg-secondary flex items-center justify-center self-start disabled:opacity-30">
+                  <Mic className="w-4 h-4 text-foreground" />
+                </button>
+              </div>
+              <button onClick={addNote} disabled={!newTitle} className="w-full min-h-touch bg-primary text-primary-foreground rounded-2xl font-semibold disabled:opacity-50">
+                {t("Save Note", "نوٹ محفوظ کریں")}
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {notes.map((note) => (
-          <motion.div key={note.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-card shadow-card">
-            <div className="flex items-start justify-between mb-2">
-              <h3 className="font-semibold text-foreground">{note.title}</h3>
-              <div className="flex gap-1">
-                <button onClick={() => { setEditing(note.id); setEditContent(note.content); }} className="p-2 rounded-lg hover:bg-secondary">
-                  <Edit className="w-4 h-4 text-muted-foreground" />
-                </button>
-                <button onClick={() => setNotes(n => n.filter(x => x.id !== note.id))} className="p-2 rounded-lg hover:bg-destructive/10">
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                </button>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : notes.length === 0 ? (
+          <div className="text-center py-12">
+            <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-muted-foreground">{t("No notes yet", "ابھی کوئی نوٹ نہیں")}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t("Tap + or use voice to create one", "شامل کرنے کے لیے + دبائیں یا آواز استعمال کریں")}</p>
+          </div>
+        ) : (
+          notes.map((note) => (
+            <motion.div key={note.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-card shadow-card">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-foreground">{note.title}</h3>
+                <div className="flex gap-1">
+                  <button onClick={() => { setEditing(note.id); setEditContent(note.content || ""); }} className="p-2 rounded-lg hover:bg-secondary">
+                    <Edit className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                  <button onClick={() => deleteNote(note.id)} className="p-2 rounded-lg hover:bg-destructive/10">
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </button>
+                </div>
               </div>
-            </div>
-            {editing === note.id ? (
-              <div className="space-y-2">
-                <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full min-h-[80px] px-3 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none text-sm" />
-                <button onClick={() => saveEdit(note.id)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm">
-                  <Save className="w-3 h-3" /> {t("Save", "محفوظ")}
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{note.content}</p>
-            )}
-            <p className="text-[10px] text-muted-foreground mt-2">
-              {new Date(note.updated_at).toLocaleDateString()}
-            </p>
-          </motion.div>
-        ))}
+              {editing === note.id ? (
+                <div className="space-y-2">
+                  <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full min-h-[80px] px-3 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none text-sm" />
+                  <button onClick={() => saveEdit(note.id)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm">
+                    <Save className="w-3 h-3" /> {t("Save", "محفوظ")}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{note.content}</p>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-2">{new Date(note.updated_at).toLocaleDateString()}</p>
+            </motion.div>
+          ))
+        )}
       </div>
     </div>
   );
