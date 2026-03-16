@@ -71,9 +71,9 @@ const MessagesPage = () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background pb-20">
       <header className="flex items-center gap-3 px-4 py-3 border-b border-border">
-        <button onClick={() => navigate("/companion")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
+        <button onClick={() => navigate("/home")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
           <ArrowLeft className="w-5 h-5 text-foreground" />
         </button>
         <h1 className="text-xl font-bold text-foreground">{t("Messages", "پیغامات")}</h1>
