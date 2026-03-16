@@ -33,12 +33,12 @@ const HealthDashboard = () => {
   const [metrics] = useState<HealthMetric[]>(mockMetrics);
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background pb-20">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/companion")}
+            onClick={() => navigate("/home")}
             className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />

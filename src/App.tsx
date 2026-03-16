@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import BottomNav from "@/components/BottomNav";
 import IntroPage from "./pages/IntroPage";
 import AuthPage from "./pages/AuthPage";
 import ProfileSetup from "./pages/ProfileSetup";
@@ -15,6 +16,7 @@ import RemindersPage from "./pages/RemindersPage";
 import NotesPage from "./pages/NotesPage";
 import ContactsPage from "./pages/ContactsPage";
 import MessagesPage from "./pages/MessagesPage";
+import WhatsAppPage from "./pages/WhatsAppPage";
 import SettingsPage from "./pages/SettingsPage";
 import ResetPassword from "./pages/ResetPassword";
 import EmergencyPage from "./pages/EmergencyPage";
@@ -43,6 +45,7 @@ const App = () => (
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/contacts" element={<ContactsPage />} />
               <Route path="/messages" element={<MessagesPage />} />
+              <Route path="/whatsapp" element={<WhatsAppPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/emergency" element={<EmergencyPage />} />
@@ -50,6 +53,7 @@ const App = () => (
               <Route path="/caregiver" element={<CaregiverPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <BottomNav />
           </BrowserRouter>
         </AuthProvider>
       </AccessibilityProvider>
