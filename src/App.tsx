@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import BottomNav from "@/components/BottomNav";
 import IntroPage from "./pages/IntroPage";
 import AuthPage from "./pages/AuthPage";
@@ -29,34 +30,36 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <AccessibilityProvider>
-        <AuthProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<IntroPage />} />
-              <Route path="/auth" element={<AuthPage />} />
-              <Route path="/profile-setup" element={<ProfileSetup />} />
-              <Route path="/home" element={<HomePage />} />
-              <Route path="/companion" element={<CompanionPage />} />
-              <Route path="/health-dashboard" element={<HealthDashboard />} />
-              <Route path="/reminders" element={<RemindersPage />} />
-              <Route path="/notes" element={<NotesPage />} />
-              <Route path="/contacts" element={<ContactsPage />} />
-              <Route path="/messages" element={<MessagesPage />} />
-              <Route path="/whatsapp" element={<WhatsAppPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/emergency" element={<EmergencyPage />} />
-              <Route path="/navigation" element={<NavigationPage />} />
-              <Route path="/caregiver" element={<CaregiverPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            <BottomNav />
-          </BrowserRouter>
-        </AuthProvider>
-      </AccessibilityProvider>
+      <ThemeProvider>
+        <AccessibilityProvider>
+          <AuthProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<IntroPage />} />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/profile-setup" element={<ProfileSetup />} />
+                <Route path="/home" element={<HomePage />} />
+                <Route path="/companion" element={<CompanionPage />} />
+                <Route path="/health-dashboard" element={<HealthDashboard />} />
+                <Route path="/reminders" element={<RemindersPage />} />
+                <Route path="/notes" element={<NotesPage />} />
+                <Route path="/contacts" element={<ContactsPage />} />
+                <Route path="/messages" element={<MessagesPage />} />
+                <Route path="/whatsapp" element={<WhatsAppPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/emergency" element={<EmergencyPage />} />
+                <Route path="/navigation" element={<NavigationPage />} />
+                <Route path="/caregiver" element={<CaregiverPage />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+              <BottomNav />
+            </BrowserRouter>
+          </AuthProvider>
+        </AccessibilityProvider>
+      </ThemeProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

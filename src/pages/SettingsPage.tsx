@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import {
-  ArrowLeft, Globe, Type, Sun, Volume2, Mic, MicOff, LogOut, User, Shield, Navigation
+  ArrowLeft, Globe, Type, Sun, Moon, Volume2, Mic, MicOff, LogOut, User, Shield, Navigation
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,7 +16,10 @@ const SettingsPage = () => {
     voiceSpeed, setVoiceSpeed, voiceGender, setVoiceGender, speak, disabilityType, mode, setMode
   } = useAccessibility();
   const { signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [privacyMode, setPrivacyMode] = useState(false);
+
+  usePageAnnounce("Settings", "ترتیبات");
 
   const handleLogout = async () => {
     await signOut();
@@ -40,24 +45,6 @@ const SettingsPage = () => {
     </button>
   );
 
-  const OptionGrid = ({ options, value, onChange, labels }: {
-    options: readonly string[]; value: string; onChange: (v: any) => void; labels?: Record<string, string>;
-  }) => (
-    <div className={`grid grid-cols-${options.length} gap-2`}>
-      {options.map(opt => (
-        <button
-          key={opt}
-          onClick={() => onChange(opt)}
-          className={`min-h-touch rounded-xl text-sm font-medium capitalize transition-colors ${
-            value === opt ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
-          }`}
-        >
-          {labels?.[opt] || opt}
-        </button>
-      ))}
-    </div>
-  );
-
   return (
     <div className="flex flex-col min-h-screen bg-background pb-20">
       <header className="flex items-center gap-3 px-4 py-3 border-b border-border">
@@ -68,6 +55,18 @@ const SettingsPage = () => {
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* Theme: Light/Dark */}
+        <div className="p-4 rounded-2xl bg-card shadow-card flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {theme === "dark" ? <Moon className="w-5 h-5 text-primary" /> : <Sun className="w-5 h-5 text-primary" />}
+            <div>
+              <p className="font-semibold text-foreground">{t("Appearance", "ظاہری شکل")}</p>
+              <p className="text-xs text-muted-foreground">{theme === "dark" ? t("Dark Mode", "ڈارک موڈ") : t("Light Mode", "لائٹ موڈ")}</p>
+            </div>
+          </div>
+          <ToggleSwitch active={theme === "dark"} onToggle={toggleTheme} />
+        </div>
+
         {/* Language */}
         <div className="p-4 rounded-2xl bg-card shadow-card">
           <div className="flex items-center gap-3 mb-3">
@@ -129,7 +128,7 @@ const SettingsPage = () => {
             {(["slow", "normal", "fast"] as const).map(speed => (
               <button
                 key={speed}
-                onClick={() => setVoiceSpeed(speed)}
+                onClick={() => { setVoiceSpeed(speed); speak(t(`Speed: ${speed}`, speed === "slow" ? "آہستہ" : speed === "fast" ? "تیز" : "عام")); }}
                 className={`min-h-touch rounded-xl text-sm font-medium capitalize transition-colors ${
                   voiceSpeed === speed ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
                 }`}
@@ -150,7 +149,7 @@ const SettingsPage = () => {
             {(["female", "male"] as const).map(g => (
               <button
                 key={g}
-                onClick={() => setVoiceGender(g)}
+                onClick={() => { setVoiceGender(g); speak(t(`${g} voice selected`, g === "female" ? "خاتون آواز منتخب" : "مرد آواز منتخب")); }}
                 className={`min-h-touch rounded-xl text-sm font-medium capitalize transition-colors ${
                   voiceGender === g ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
                 }`}

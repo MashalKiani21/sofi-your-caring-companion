@@ -4,7 +4,8 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { ContactService, type Contact } from "@/services/ContactService";
 import { WhatsAppService } from "@/services/WhatsAppService";
-import { ArrowLeft, MessageCircle, Phone, Search, Send, Mic, MicOff } from "lucide-react";
+import { usePageAnnounce } from "@/hooks/usePageAnnounce";
+import { ArrowLeft, MessageCircle, Phone, Search, Send, Mic, MicOff, Volume2, FileText } from "lucide-react";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { MessagingService } from "@/services/MessagingService";
 import { motion } from "framer-motion";
@@ -19,15 +20,20 @@ const WhatsAppPage = () => {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [incomingVoiceText, setIncomingVoiceText] = useState("");
+
+  usePageAnnounce("WhatsApp", "واٹس ایپ");
 
   const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
     language,
     onResult: (text) => {
       const composed = MessagingService.composeFromVoice(text);
       setMessage(composed);
-      // For hearing-impaired: show transcription
+
+      // For hearing-impaired: auto-convert voice to visible text
       if (disabilityType === "hearing") {
-        toast.info(MessagingService.voiceToTextForHearingImpaired(text));
+        setIncomingVoiceText(composed);
+        toast.info(t("Voice transcribed to text ✓", "آواز ٹیکسٹ میں تبدیل ✓"));
       }
     },
   });
@@ -70,6 +76,16 @@ const WhatsAppPage = () => {
     speak(t(`Opening WhatsApp chat with ${contact.name}`, `${contact.name} کے ساتھ واٹس ایپ چیٹ`));
   };
 
+  /**
+   * Accessibility: Read text aloud for visually impaired users
+   * In a real app with incoming WhatsApp messages via Capacitor plugin,
+   * each incoming text message would trigger this automatically.
+   */
+  const readTextAloud = (text: string) => {
+    MessagingService.readAloudForVisuallyImpaired(text, language as "en" | "ur");
+    toast.info(t("Reading message aloud...", "پیغام پڑھ رہے ہیں..."));
+  };
+
   if (selectedContact) {
     return (
       <div className="flex flex-col h-screen bg-background">
@@ -90,22 +106,51 @@ const WhatsAppPage = () => {
           </button>
         </header>
 
-        <div className="flex-1 flex items-center justify-center px-6">
-          <div className="text-center space-y-4">
-            <MessageCircle className="w-16 h-16 text-success/30 mx-auto" />
-            <p className="text-muted-foreground">
-              {t(
-                "Compose your message below. It will open in WhatsApp.",
-                "نیچے اپنا پیغام لکھیں۔ یہ واٹس ایپ میں کھلے گا۔"
-              )}
-            </p>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
+          <MessageCircle className="w-16 h-16 text-success/30" />
+          <p className="text-muted-foreground text-center">
+            {t("Compose your message below. It will open in WhatsApp.", "نیچے اپنا پیغام لکھیں۔ واٹس ایپ میں کھلے گا۔")}
+          </p>
+
+          {/* Accessibility hints */}
+          {disabilityType === "hearing" && (
+            <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20 text-sm text-center text-primary">
+              <FileText className="w-4 h-4 inline mr-1" />
+              {t("Voice notes will be auto-transcribed to text for you", "وائس نوٹس خود بخود ٹیکسٹ میں تبدیل ہوں گے")}
+            </div>
+          )}
+          {disabilityType === "visual" && (
+            <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20 text-sm text-center text-primary">
+              <Volume2 className="w-4 h-4 inline mr-1" />
+              {t("Text messages will be read aloud for you", "ٹیکسٹ پیغامات آپ کو پڑھ کر سنائے جائیں گے")}
+            </div>
+          )}
+
+          {/* Incoming voice transcription for hearing impaired */}
+          {incomingVoiceText && disabilityType === "hearing" && (
+            <div className="w-full p-4 rounded-2xl bg-card border border-border">
+              <p className="text-xs text-muted-foreground mb-1">{t("Voice transcription:", "آواز کی نقل:")}</p>
+              <p className="text-foreground">{incomingVoiceText}</p>
+            </div>
+          )}
+
+          <button
+            onClick={() => handleOpenChat(selectedContact)}
+            className="min-h-touch px-6 rounded-2xl bg-success text-success-foreground font-semibold"
+          >
+            {t("Open Chat in WhatsApp", "واٹس ایپ میں چیٹ کھولیں")}
+          </button>
+
+          {/* Read aloud button for visually impaired */}
+          {disabilityType === "visual" && message && (
             <button
-              onClick={() => handleOpenChat(selectedContact)}
-              className="min-h-touch px-6 rounded-2xl bg-success text-success-foreground font-semibold"
+              onClick={() => readTextAloud(message)}
+              className="min-h-touch px-6 rounded-2xl bg-primary/10 text-primary font-medium flex items-center gap-2"
             >
-              {t("Open Chat in WhatsApp", "واٹس ایپ میں چیٹ کھولیں")}
+              <Volume2 className="w-5 h-5" />
+              {t("Read message aloud", "پیغام سنائیں")}
             </button>
-          </div>
+          )}
         </div>
 
         <div className="border-t border-border px-4 py-3 bg-card">
@@ -172,7 +217,7 @@ const WhatsAppPage = () => {
           </div>
         ) : filtered.length === 0 ? (
           <p className="text-center text-muted-foreground py-12">
-            {t("No contacts found. Add emergency contacts first.", "کوئی رابطہ نہیں ملا۔ پہلے ایمرجنسی رابطے شامل کریں۔")}
+            {t("No contacts found. Add contacts first.", "کوئی رابطہ نہیں ملا۔ پہلے رابطے شامل کریں۔")}
           </p>
         ) : (
           filtered.map((contact, i) => (

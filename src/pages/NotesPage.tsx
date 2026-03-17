@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Plus, Trash2, Edit, Save, Mic, MicOff, X, FileText } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Edit, Save, Mic, MicOff, X, FileText, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
@@ -19,7 +20,7 @@ interface NoteData {
 
 const NotesPage = () => {
   const navigate = useNavigate();
-  const { t, speak, language } = useAccessibility();
+  const { t, speak, language, disabilityType } = useAccessibility();
   const { user } = useAuth();
   const [notes, setNotes] = useState<NoteData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +30,8 @@ const NotesPage = () => {
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [voiceTarget, setVoiceTarget] = useState<"title" | "content" | null>(null);
+
+  usePageAnnounce("Notes", "نوٹس");
 
   const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
     language,
@@ -42,6 +45,7 @@ const NotesPage = () => {
         setNewTitle(text.slice(0, 50));
         setNewContent(text);
         setShowAdd(true);
+        speak(t("Note captured! Review and save.", "نوٹ لیا! جائزہ لیں اور محفوظ کریں۔"));
       }
       setVoiceTarget(null);
     },
@@ -70,6 +74,14 @@ const NotesPage = () => {
   const addNote = async () => {
     if (!newTitle || !user) return;
     try {
+      /**
+       * Notes are stored in PostgreSQL via Lovable Cloud.
+       * In a Capacitor build, these notes sync to the cloud so they
+       * persist across devices — similar to Google Keep.
+       * 
+       * PLACEHOLDER: For offline-first support, implement local SQLite
+       * storage with background sync via @capacitor-community/sqlite
+       */
       const { error } = await supabase.from("notes").insert({
         title: newTitle,
         content: newContent,
@@ -113,7 +125,12 @@ const NotesPage = () => {
   const startVoiceFor = (target: "title" | "content") => {
     setVoiceTarget(target);
     startListening();
-    speak(t(`Speak your ${target}`, `اپنا ${target} بولیں`));
+    speak(t(`Speak your ${target}`, target === "title" ? "عنوان بولیں" : "مواد بولیں"));
+  };
+
+  /** Read note aloud for visually impaired users */
+  const readNoteAloud = (note: NoteData) => {
+    speak(`${note.title}. ${note.content || ""}`);
   };
 
   return (
@@ -155,7 +172,7 @@ const NotesPage = () => {
                 </button>
               </div>
               <div className="flex gap-2">
-                <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} placeholder={t("Content...", "مواد...")}
+                <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} placeholder={t("Content (voice or text)...", "مواد (آواز یا ٹیکسٹ)...")}
                   className="flex-1 min-h-[100px] px-4 py-3 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
                 <button onClick={() => startVoiceFor("content")} disabled={!isSupported}
                   className="min-h-touch min-w-touch rounded-xl bg-secondary flex items-center justify-center self-start disabled:opacity-30">
@@ -185,6 +202,12 @@ const NotesPage = () => {
               <div className="flex items-start justify-between mb-2">
                 <h3 className="font-semibold text-foreground">{note.title}</h3>
                 <div className="flex gap-1">
+                  {/* Read aloud for visually impaired */}
+                  {disabilityType === "visual" && (
+                    <button onClick={() => readNoteAloud(note)} className="p-2 rounded-lg hover:bg-primary/10" aria-label="Read aloud">
+                      <Volume2 className="w-4 h-4 text-primary" />
+                    </button>
+                  )}
                   <button onClick={() => { setEditing(note.id); setEditContent(note.content || ""); }} className="p-2 rounded-lg hover:bg-secondary">
                     <Edit className="w-4 h-4 text-muted-foreground" />
                   </button>
