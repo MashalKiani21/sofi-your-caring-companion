@@ -4,7 +4,8 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { ReminderService, type ReminderData } from "@/services/ReminderService";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
-import { ArrowLeft, Plus, Clock, Trash2, Bell, Check, Mic, MicOff, X } from "lucide-react";
+import { usePageAnnounce } from "@/hooks/usePageAnnounce";
+import { ArrowLeft, Plus, Clock, Trash2, Bell, Check, Mic, MicOff, X, AlarmClock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
@@ -18,6 +19,8 @@ const RemindersPage = () => {
   const [newTitle, setNewTitle] = useState("");
   const [newTime, setNewTime] = useState("");
   const [newRecurring, setNewRecurring] = useState<string>("once");
+
+  usePageAnnounce("Reminders", "یاد دہانیاں");
 
   const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
     language,
@@ -66,7 +69,25 @@ const RemindersPage = () => {
       setShowAdd(false);
       speak(t("Reminder added!", "یاد دہانی شامل ہو گئی!"));
       toast.success(t("Reminder added", "یاد دہانی شامل"));
-      // TODO: Schedule device notification via Capacitor LocalNotifications plugin
+      /**
+       * PLACEHOLDER: Set alarm on device clock/alarm app
+       * In Capacitor, use @capacitor-community/local-notifications:
+       * import { LocalNotifications } from '@capacitor/local-notifications';
+       * await LocalNotifications.schedule({
+       *   notifications: [{
+       *     title: newTitle,
+       *     body: 'SOFI Reminder',
+       *     id: Math.floor(Math.random() * 100000),
+       *     schedule: { at: new Date(newTime) },
+       *     sound: 'alarm.wav',
+       *     extra: { recurring: newRecurring }
+       *   }]
+       * });
+       * 
+       * For actual alarm clock integration on Android:
+       * Use @capacitor/intents to launch AlarmClock intent:
+       * intent.setAction(AlarmClock.ACTION_SET_ALARM)
+       */
     } catch (err) {
       toast.error(t("Failed to add reminder", "یاد دہانی شامل نہیں ہوئی"));
     }
@@ -100,7 +121,7 @@ const RemindersPage = () => {
           </button>
           <div>
             <h1 className="text-xl font-bold text-foreground">{t("Reminders", "یاد دہانیاں")}</h1>
-            <p className="text-sm text-muted-foreground">{t("Manage your schedule", "اپنا شیڈول سنبھالیں")}</p>
+            <p className="text-sm text-muted-foreground">{t("Voice or text", "آواز یا ٹیکسٹ")}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -120,6 +141,12 @@ const RemindersPage = () => {
         </div>
       </header>
 
+      {/* Alarm integration hint */}
+      <div className="mx-4 mt-3 p-3 rounded-2xl bg-accent border border-border flex items-center gap-2 text-sm text-muted-foreground">
+        <AlarmClock className="w-4 h-4 shrink-0" />
+        <span>{t("Reminders will sync with your phone's alarm app when installed natively.", "یاد دہانیاں آپ کے فون کی الارم ایپ سے مطابقت رکھیں گی۔")}</span>
+      </div>
+
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         <AnimatePresence>
           {showAdd && (
@@ -127,7 +154,7 @@ const RemindersPage = () => {
               <input
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder={t("Reminder title...", "یاد دہانی کا عنوان...")}
+                placeholder={t("Reminder title (or say it)...", "یاد دہانی کا عنوان (یا بولیں)...")}
                 className="w-full min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <input
@@ -164,7 +191,7 @@ const RemindersPage = () => {
           <div className="text-center py-12">
             <Bell className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground">{t("No reminders yet", "ابھی کوئی یاد دہانی نہیں")}</p>
-            <p className="text-sm text-muted-foreground mt-1">{t("Tap + or use voice to create one", "شامل کرنے کے لیے + دبائیں یا آواز استعمال کریں")}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t("Tap + or say \"Remind me to take medicine at 9 PM\"", "+ دبائیں یا بولیں \"مجھے 9 بجے دوائی یاد دلائیں\"")}</p>
           </div>
         ) : (
           reminders.map((rem, i) => (

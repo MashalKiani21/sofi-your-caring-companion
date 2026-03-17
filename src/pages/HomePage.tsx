@@ -2,13 +2,14 @@ import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import { VoiceService } from "@/services/VoiceService";
 import { ContactService } from "@/services/ContactService";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Bot, Bell, Phone, MapPin, HeartPulse, ShieldAlert, Settings, Mic, MicOff, LogOut,
-  MessageCircle, FileText, MessageSquare
+  MessageCircle, FileText, MessageSquare, Keyboard
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +19,10 @@ const HomePage = () => {
   const { user, signOut } = useAuth();
   const [wakeWordActive, setWakeWordActive] = useState(false);
   const [voiceFeedback, setVoiceFeedback] = useState("");
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [textCommand, setTextCommand] = useState("");
+
+  usePageAnnounce("Home", "ہوم");
 
   const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
     language,
@@ -35,7 +40,6 @@ const HomePage = () => {
         navigate(intent.page);
         break;
       case "call": {
-        // Try to find contact
         if (user) {
           try {
             const contacts = await ContactService.getContacts(user.id);
@@ -43,16 +47,18 @@ const HomePage = () => {
             if (matches.length === 1) {
               ContactService.makeCall(matches[0].phone);
             } else if (matches.length > 1) {
-              const names = matches.map((c) => c.name).join(", ");
+              // Disambiguation: ask which contact
+              const details = matches.map((c, i) => `${i + 1}. ${c.name} (${c.relationship}) - ${c.phone}`).join("\n");
               const msg = t(
-                `I found ${matches.length} contacts named ${intent.contactName}: ${names}. Please specify which one.`,
-                `${intent.contactName} نام کے ${matches.length} رابطے ملے: ${names}۔ براہ کرم وضاحت کریں۔`
+                `I found ${matches.length} contacts named "${intent.contactName}":\n${details}\nPlease say the number or full name with relationship.`,
+                `"${intent.contactName}" نام کے ${matches.length} رابطے ملے:\n${details}\nبراہ کرم نمبر یا پورا نام بتائیں۔`
               );
               speak(msg);
-              toast.info(msg);
+              toast.info(msg, { duration: 8000 });
             } else {
-              speak(t(`No contact named ${intent.contactName} found.`, `${intent.contactName} نام کا کوئی رابطہ نہیں ملا۔`));
-              toast.error(t("Contact not found", "رابطہ نہیں ملا"));
+              const msg = t(`No contact named "${intent.contactName}" found.`, `"${intent.contactName}" نام کا کوئی رابطہ نہیں ملا۔`);
+              speak(msg);
+              toast.error(msg);
             }
           } catch {
             navigate("/contacts");
@@ -73,12 +79,19 @@ const HomePage = () => {
         navigate("/emergency");
         break;
       default:
-        // Forward to AI companion
         navigate("/companion");
         break;
     }
 
-    setTimeout(() => setVoiceFeedback(""), 3000);
+    setTimeout(() => setVoiceFeedback(""), 4000);
+  };
+
+  const handleTextCommand = () => {
+    if (textCommand.trim()) {
+      handleVoiceCommand(textCommand.trim());
+      setTextCommand("");
+      setShowTextInput(false);
+    }
   };
 
   const toggleWakeWord = () => {
@@ -86,38 +99,41 @@ const HomePage = () => {
     if (!wakeWordActive) {
       speak(t("Hey SOFI mode activated. Say Hey SOFI to start.", "ہے سوفی موڈ فعال۔ ہے سوفی بولیں۔"));
       toast.success(t("Wake word active", "ویک ورڈ فعال"));
-      // TODO: Integrate real wake-word library (e.g. Picovoice Porcupine)
-      // Porcupine would listen continuously for "Hey SOFI" keyword
-      // and trigger startListening() when detected
+      /**
+       * TODO: Integrate real wake-word library (Picovoice Porcupine or similar)
+       * Porcupine listens continuously for "Hey SOFI" keyword
+       * and triggers startListening() when detected.
+       * In Capacitor: use @anthropic/porcupine-react-native or web SDK
+       */
     } else {
       toast.info(t("Wake word disabled", "ویک ورڈ غیر فعال"));
     }
   };
 
   const features = [
-    { label: t("AI Companion", "AI ساتھی"), icon: Bot, path: "/companion", color: "bg-primary/10 text-primary", borderColor: "border-primary/20" },
-    { label: t("Contacts & Calls", "رابطے اور کالز"), icon: Phone, path: "/contacts", color: "bg-success/10 text-success", borderColor: "border-success/20" },
-    { label: t("Messages", "پیغامات"), icon: MessageSquare, path: "/messages", color: "bg-primary/10 text-primary", borderColor: "border-primary/20" },
-    { label: t("WhatsApp", "واٹس ایپ"), icon: MessageCircle, path: "/whatsapp", color: "bg-success/10 text-success", borderColor: "border-success/20" },
-    { label: t("Reminders", "یاد دہانیاں"), icon: Bell, path: "/reminders", color: "bg-[hsl(45_93%_47%/0.1)] text-[hsl(45_93%_47%)]", borderColor: "border-[hsl(45_93%_47%/0.2)]" },
-    { label: t("Notes", "نوٹس"), icon: FileText, path: "/notes", color: "bg-[hsl(270_60%_55%/0.1)] text-[hsl(270_60%_55%)]", borderColor: "border-[hsl(270_60%_55%/0.2)]" },
-    { label: t("Health", "صحت"), icon: HeartPulse, path: "/health-dashboard", color: "bg-emergency/10 text-emergency", borderColor: "border-emergency/20" },
-    { label: t("Emergency SOS", "ایمرجنسی SOS"), icon: ShieldAlert, path: "/emergency", color: "bg-emergency/15 text-emergency", borderColor: "border-emergency/30" },
-    { label: t("Navigation", "نقشہ جات"), icon: MapPin, path: "/navigation", color: "bg-[hsl(200_70%_50%/0.1)] text-[hsl(200_70%_50%)]", borderColor: "border-[hsl(200_70%_50%/0.2)]" },
-    { label: t("Settings", "ترتیبات"), icon: Settings, path: "/settings", color: "bg-muted/10 text-muted-foreground", borderColor: "border-border" },
+    { label: t("AI Companion", "AI ساتھی"), sublabel: t("Chat & Voice", "چیٹ اور آواز"), icon: Bot, path: "/companion", bg: "bg-primary/10", iconColor: "text-primary", border: "border-primary/20" },
+    { label: t("Contacts", "رابطے"), sublabel: t("Call & Message", "کال اور پیغام"), icon: Phone, path: "/contacts", bg: "bg-success/10", iconColor: "text-success", border: "border-success/20" },
+    { label: t("Messages", "پیغامات"), sublabel: t("SMS & Text", "SMS اور ٹیکسٹ"), icon: MessageSquare, path: "/messages", bg: "bg-primary/10", iconColor: "text-primary", border: "border-primary/20" },
+    { label: t("WhatsApp", "واٹس ایپ"), sublabel: t("Chat & Call", "چیٹ اور کال"), icon: MessageCircle, path: "/whatsapp", bg: "bg-success/10", iconColor: "text-success", border: "border-success/20" },
+    { label: t("Reminders", "یاد دہانیاں"), sublabel: t("Alarms & Tasks", "الارم اور کام"), icon: Bell, path: "/reminders", bg: "bg-accent", iconColor: "text-foreground", border: "border-border" },
+    { label: t("Notes", "نوٹس"), sublabel: t("Voice & Text", "آواز اور ٹیکسٹ"), icon: FileText, path: "/notes", bg: "bg-accent", iconColor: "text-foreground", border: "border-border" },
+    { label: t("Health", "صحت"), sublabel: t("Dashboard", "ڈیش بورڈ"), icon: HeartPulse, path: "/health-dashboard", bg: "bg-emergency/10", iconColor: "text-emergency", border: "border-emergency/20" },
+    { label: t("Emergency", "ایمرجنسی"), sublabel: "SOS", icon: ShieldAlert, path: "/emergency", bg: "bg-emergency/15", iconColor: "text-emergency", border: "border-emergency/30" },
+    { label: t("Navigation", "نقشہ جات"), sublabel: t("Maps", "نقشے"), icon: MapPin, path: "/navigation", bg: "bg-secondary", iconColor: "text-foreground", border: "border-border" },
+    { label: t("Settings", "ترتیبات"), sublabel: t("Customize", "ترمیم"), icon: Settings, path: "/settings", bg: "bg-secondary", iconColor: "text-muted-foreground", border: "border-border" },
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-background pb-20">
+    <div className="flex flex-col min-h-screen bg-background pb-24">
       {/* Header */}
-      <header className="px-5 pt-6 pb-3">
+      <header className="px-5 pt-6 pb-2">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
               {t("Hello", "السلام علیکم")} 👋
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t("How can SOFI help you today?", "آج سوفی آپ کی کیسے مدد کر سکتی ہے؟")}
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t("How can SOFI help you?", "سوفی آپ کی کیسے مدد کرے؟")}
             </p>
           </div>
           <button
@@ -129,51 +145,91 @@ const HomePage = () => {
           </button>
         </div>
 
-        {/* Wake word toggle */}
-        <button
-          onClick={toggleWakeWord}
-          className={`mt-3 w-full py-3 px-4 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-            wakeWordActive
-              ? "bg-primary/10 text-primary border border-primary/20"
-              : "bg-secondary text-muted-foreground border border-border"
-          }`}
-        >
-          <Mic className="w-4 h-4" />
-          {wakeWordActive
-            ? t("\"Hey SOFI\" is active", "\"ہے سوفی\" فعال ہے")
-            : t("Enable \"Hey SOFI\"", "\"ہے سوفی\" فعال کریں")}
-        </button>
+        {/* Wake word + text command toggle */}
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={toggleWakeWord}
+            className={`flex-1 py-3 px-4 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+              wakeWordActive
+                ? "bg-primary/10 text-primary border border-primary/20"
+                : "bg-secondary text-muted-foreground border border-border"
+            }`}
+          >
+            <Mic className="w-4 h-4" />
+            {wakeWordActive ? t("\"Hey SOFI\" ON", "\"ہے سوفی\" فعال") : t("\"Hey SOFI\"", "\"ہے سوفی\"")}
+          </button>
+          {/* Text command option for speech-impaired users */}
+          <button
+            onClick={() => setShowTextInput(!showTextInput)}
+            className="min-h-touch min-w-touch rounded-2xl bg-secondary border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={t("Type a command", "کمانڈ ٹائپ کریں")}
+          >
+            <Keyboard className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Text command input for mute/speech impaired */}
+        {showTextInput && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="mt-2 flex gap-2"
+          >
+            <input
+              value={textCommand}
+              onChange={(e) => setTextCommand(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleTextCommand()}
+              placeholder={t("Type command: \"Call Ahmed\", \"Open notes\"...", "کمانڈ لکھیں: \"احمد کو کال کرو\"...")}
+              className="flex-1 min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              dir={language === "ur" ? "rtl" : "ltr"}
+              autoFocus
+            />
+            <button
+              onClick={handleTextCommand}
+              className="min-h-touch px-5 rounded-2xl bg-primary text-primary-foreground font-medium text-sm"
+            >
+              {t("Go", "چلو")}
+            </button>
+          </motion.div>
+        )}
       </header>
 
       {/* Voice feedback */}
       {voiceFeedback && (
-        <div className="mx-5 mb-2 p-3 rounded-2xl bg-primary/10 border border-primary/20 text-sm text-primary font-medium text-center animate-pulse">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-5 mb-2 p-3 rounded-2xl bg-primary/10 border border-primary/20 text-sm text-primary font-medium text-center"
+        >
           {voiceFeedback}
-        </div>
+        </motion.div>
       )}
 
       {/* Feature Grid */}
-      <div className="flex-1 px-5 overflow-y-auto">
+      <div className="flex-1 px-4 overflow-y-auto">
         <div className="grid grid-cols-2 gap-3">
           {features.map((feat, i) => (
             <motion.button
               key={feat.path}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
+              transition={{ delay: i * 0.04, duration: 0.3 }}
               onClick={() => {
                 if (disabilityType === "visual") speak(feat.label);
                 navigate(feat.path);
               }}
-              className={`flex flex-col items-center justify-center gap-3 p-5 rounded-3xl border-2 ${feat.borderColor} bg-card shadow-card min-h-[130px] hover:scale-[1.02] active:scale-[0.98] transition-transform`}
+              className={`flex flex-col items-center justify-center gap-2.5 p-4 rounded-3xl border-2 ${feat.border} bg-card shadow-card min-h-[120px] hover:scale-[1.02] active:scale-[0.97] transition-all`}
               aria-label={feat.label}
             >
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${feat.color}`}>
-                <feat.icon className="w-7 h-7" />
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${feat.bg}`}>
+                <feat.icon className={`w-7 h-7 ${feat.iconColor}`} />
               </div>
-              <span className="text-sm font-semibold text-foreground text-center leading-tight">
-                {feat.label}
-              </span>
+              <div className="text-center">
+                <span className="text-sm font-semibold text-foreground block leading-tight">
+                  {feat.label}
+                </span>
+                <span className="text-[11px] text-muted-foreground">{feat.sublabel}</span>
+              </div>
             </motion.button>
           ))}
         </div>
@@ -181,29 +237,36 @@ const HomePage = () => {
         {/* Caregiver link */}
         <button
           onClick={() => navigate("/caregiver")}
-          className="w-full mt-4 mb-4 py-4 px-5 rounded-2xl bg-secondary border border-border text-foreground font-medium text-left flex items-center justify-between"
+          className="w-full mt-4 mb-4 py-4 px-5 rounded-2xl bg-card border-2 border-border text-foreground font-medium text-left flex items-center justify-between shadow-card hover:bg-secondary/50 transition-colors"
         >
           <span>{t("Caregiver Dashboard", "نگہداشت کنندہ ڈیش بورڈ")}</span>
           <span className="text-muted-foreground">→</span>
         </button>
       </div>
 
-      {/* Floating Voice Button */}
+      {/* Big Central Mic Button */}
       <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30">
+        {/* Pulse rings when listening */}
+        {isListening && (
+          <>
+            <div className="absolute inset-0 w-20 h-20 -m-2 rounded-full bg-emergency/20 animate-pulse-ring" />
+            <div className="absolute inset-0 w-20 h-20 -m-2 rounded-full bg-emergency/10 animate-pulse-ring" style={{ animationDelay: "0.5s" }} />
+          </>
+        )}
         <button
           onClick={() => isListening ? stopListening() : startListening()}
           disabled={!isSupported}
-          className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${
+          className={`relative w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-all ${
             isListening
-              ? "bg-emergency text-emergency-foreground animate-pulse scale-110"
-              : "bg-primary text-primary-foreground hover:bg-primary/90"
+              ? "bg-emergency text-emergency-foreground scale-110"
+              : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-2xl"
           } disabled:opacity-30`}
           aria-label={isListening ? t("Stop listening", "سننا بند کریں") : t("Voice command", "آواز کمانڈ")}
         >
-          {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+          {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-8 h-8" />}
         </button>
         {isListening && (
-          <p className="text-xs text-center mt-2 text-emergency font-medium animate-pulse">
+          <p className="text-xs text-center mt-2 text-emergency font-semibold animate-pulse">
             {t("Listening...", "سن رہی ہے...")}
           </p>
         )}
