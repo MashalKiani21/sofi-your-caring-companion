@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -28,6 +28,28 @@ const AuthPage = () => {
     },
   });
 
+  // Voice-guided: announce the page on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      speak(
+        t(
+          "You are on the login page. You can speak your email and password using the microphone buttons next to each field. Or type them in.",
+          "آپ لاگ ان صفحے پر ہیں۔ آپ ہر فیلڈ کے ساتھ مائیکروفون بٹن سے اپنا ای میل اور پاسورڈ بول سکتے ہیں۔ یا ٹائپ کر سکتے ہیں۔"
+        )
+      );
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Announce mode switch
+  useEffect(() => {
+    speak(
+      isLogin
+        ? t("Login form. Enter your email and password.", "لاگ ان فارم۔ اپنا ای میل اور پاسورڈ درج کریں۔")
+        : t("Sign up form. Enter your name, email and password.", "سائن اپ فارم۔ اپنا نام، ای میل اور پاسورڈ درج کریں۔")
+    );
+  }, [isLogin]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -38,12 +60,13 @@ const AuthPage = () => {
           toast.error(error.message);
           speak(t("Login failed. Please try again.", "لاگ ان ناکام۔ دوبارہ کوشش کریں۔"));
         } else {
-          speak(t("Login successful!", "لاگ ان کامیاب!"));
+          speak(t("Login successful! Setting up your profile.", "لاگ ان کامیاب! پروفائل سیٹ اپ ہو رہا ہے۔"));
           navigate("/profile-setup");
         }
       } else {
         if (!fullName.trim()) {
           toast.error(t("Please enter your name", "اپنا نام درج کریں"));
+          speak(t("Please enter your name first.", "پہلے اپنا نام درج کریں۔"));
           return;
         }
         const { error } = await signUp(email, password, fullName);
@@ -63,6 +86,7 @@ const AuthPage = () => {
   const handleForgotPassword = async () => {
     if (!email) {
       toast.error(t("Enter your email first", "پہلے ای میل درج کریں"));
+      speak(t("Please enter your email first to reset password.", "پاسورڈ ری سیٹ کے لیے پہلے ای میل درج کریں۔"));
       return;
     }
     const { error } = await resetPassword(email);
@@ -85,43 +109,45 @@ const AuthPage = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background" role="main" aria-label={isLogin ? "Login page" : "Sign up page"}>
       {/* Header */}
-      <div className="flex items-center p-4 gap-3">
+      <header className="flex items-center p-4 gap-3" role="banner">
         <button
           onClick={() => navigate("/")}
           className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary transition-colors"
-          aria-label="Go back"
+          aria-label="Go back to introduction"
         >
           <ArrowLeft className="w-5 h-5 text-foreground" />
         </button>
         <div>
           <h1 className="text-xl font-bold text-foreground">{t("SOFI", "سوفی")}</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground" aria-live="polite">
             {isLogin ? t("Welcome back", "واپس خوش آمدید") : t("Create account", "اکاؤنٹ بنائیں")}
           </p>
         </div>
-      </div>
+      </header>
 
       {/* Form */}
-      <div className="flex-1 flex flex-col justify-center px-6 max-w-md mx-auto w-full">
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex-1 flex flex-col justify-center px-6 max-w-md mx-auto w-full" role="region" aria-label="Authentication form">
+        <form onSubmit={handleSubmit} className="space-y-4" aria-label={isLogin ? "Login form" : "Sign up form"}>
           {/* Name field (signup only) */}
           {!isLogin && (
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+              <label htmlFor="auth-name" className="text-sm font-medium text-foreground">
                 {t("Full Name", "پورا نام")}
               </label>
               <div className="flex gap-2">
                 <div className="flex-1 relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" aria-hidden="true" />
                   <input
+                    id="auth-name"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder={t("Enter your name", "اپنا نام درج کریں")}
                     className="w-full min-h-touch pl-11 pr-4 rounded-2xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     aria-label="Full name"
+                    aria-describedby="name-hint"
                   />
                 </div>
                 <button
@@ -130,23 +156,25 @@ const AuthPage = () => {
                   className={`min-h-touch min-w-touch rounded-2xl flex items-center justify-center transition-colors ${
                     isListening && activeField === "name" ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
                   }`}
-                  aria-label="Speak your name"
+                  aria-label={isListening && activeField === "name" ? "Stop listening for name" : "Speak your name"}
                 >
                   <Mic className="w-5 h-5" />
                 </button>
               </div>
+              <p id="name-hint" className="sr-only">You can type your name or press the microphone button to speak it</p>
             </div>
           )}
 
           {/* Email */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
+            <label htmlFor="auth-email" className="text-sm font-medium text-foreground">
               {t("Email", "ای میل")}
             </label>
             <div className="flex gap-2">
               <div className="flex-1 relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" aria-hidden="true" />
                 <input
+                  id="auth-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -154,6 +182,7 @@ const AuthPage = () => {
                   className="w-full min-h-touch pl-11 pr-4 rounded-2xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   required
                   aria-label="Email address"
+                  aria-describedby="email-hint"
                 />
               </div>
               <button
@@ -162,22 +191,24 @@ const AuthPage = () => {
                 className={`min-h-touch min-w-touch rounded-2xl flex items-center justify-center transition-colors ${
                   isListening && activeField === "email" ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
                 }`}
-                aria-label="Speak your email"
+                aria-label={isListening && activeField === "email" ? "Stop listening for email" : "Speak your email address"}
               >
                 <Mic className="w-5 h-5" />
               </button>
             </div>
+            <p id="email-hint" className="sr-only">You can type your email or press the microphone button to speak it</p>
           </div>
 
           {/* Password */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
+            <label htmlFor="auth-password" className="text-sm font-medium text-foreground">
               {t("Password", "پاسورڈ")}
             </label>
             <div className="flex gap-2">
               <div className="flex-1 relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" aria-hidden="true" />
                 <input
+                  id="auth-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -186,6 +217,7 @@ const AuthPage = () => {
                   required
                   minLength={6}
                   aria-label="Password"
+                  aria-describedby="password-hint"
                 />
                 <button
                   type="button"
@@ -202,11 +234,12 @@ const AuthPage = () => {
                 className={`min-h-touch min-w-touch rounded-2xl flex items-center justify-center transition-colors ${
                   isListening && activeField === "password" ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
                 }`}
-                aria-label="Speak your password"
+                aria-label={isListening && activeField === "password" ? "Stop listening for password" : "Speak your password"}
               >
                 <Mic className="w-5 h-5" />
               </button>
             </div>
+            <p id="password-hint" className="sr-only">You can type your password or press the microphone button to speak it. Minimum 6 characters.</p>
           </div>
 
           {/* Forgot password */}
@@ -215,6 +248,7 @@ const AuthPage = () => {
               type="button"
               onClick={handleForgotPassword}
               className="text-sm text-primary font-medium hover:underline"
+              aria-label="Reset your password via email"
             >
               {t("Forgot password?", "پاسورڈ بھول گئے؟")}
             </button>
@@ -225,6 +259,7 @@ const AuthPage = () => {
             type="submit"
             disabled={loading}
             className="w-full min-h-touch bg-primary text-primary-foreground rounded-2xl font-semibold text-lg hover:bg-primary/90 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            aria-label={loading ? "Please wait" : isLogin ? "Log in to your account" : "Create your account"}
           >
             {loading
               ? t("Please wait...", "براہ کرم انتظار کریں...")
@@ -239,6 +274,7 @@ const AuthPage = () => {
           <button
             onClick={() => setIsLogin(!isLogin)}
             className="text-sm text-muted-foreground hover:text-foreground min-h-touch"
+            aria-label={isLogin ? "Switch to sign up form" : "Switch to login form"}
           >
             {isLogin
               ? t("Don't have an account? Sign up", "اکاؤنٹ نہیں ہے؟ سائن اپ کریں")
