@@ -47,7 +47,6 @@ const HomePage = () => {
             if (matches.length === 1) {
               ContactService.makeCall(matches[0].phone);
             } else if (matches.length > 1) {
-              // Disambiguation: ask which contact
               const details = matches.map((c, i) => `${i + 1}. ${c.name} (${c.relationship}) - ${c.phone}`).join("\n");
               const msg = t(
                 `I found ${matches.length} contacts named "${intent.contactName}":\n${details}\nPlease say the number or full name with relationship.`,
@@ -99,12 +98,6 @@ const HomePage = () => {
     if (!wakeWordActive) {
       speak(t("Hey SOFI mode activated. Say Hey SOFI to start.", "ہے سوفی موڈ فعال۔ ہے سوفی بولیں۔"));
       toast.success(t("Wake word active", "ویک ورڈ فعال"));
-      /**
-       * TODO: Integrate real wake-word library (Picovoice Porcupine or similar)
-       * Porcupine listens continuously for "Hey SOFI" keyword
-       * and triggers startListening() when detected.
-       * In Capacitor: use @anthropic/porcupine-react-native or web SDK
-       */
     } else {
       toast.info(t("Wake word disabled", "ویک ورڈ غیر فعال"));
     }
@@ -124,9 +117,9 @@ const HomePage = () => {
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-background pb-24">
+    <div className="flex flex-col min-h-screen bg-background pb-24" role="main" aria-label="SOFI Home Dashboard">
       {/* Header */}
-      <header className="px-5 pt-6 pb-2">
+      <header className="px-5 pt-6 pb-2" role="banner">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
@@ -146,7 +139,7 @@ const HomePage = () => {
         </div>
 
         {/* Wake word + text command toggle */}
-        <div className="flex gap-2 mt-3">
+        <div className="flex gap-2 mt-3" role="toolbar" aria-label="Voice controls">
           <button
             onClick={toggleWakeWord}
             className={`flex-1 py-3 px-4 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
@@ -154,26 +147,30 @@ const HomePage = () => {
                 ? "bg-primary/10 text-primary border border-primary/20"
                 : "bg-secondary text-muted-foreground border border-border"
             }`}
+            aria-pressed={wakeWordActive}
+            aria-label={wakeWordActive ? "Hey SOFI wake word is active" : "Activate Hey SOFI wake word"}
           >
             <Mic className="w-4 h-4" />
             {wakeWordActive ? t("\"Hey SOFI\" ON", "\"ہے سوفی\" فعال") : t("\"Hey SOFI\"", "\"ہے سوفی\"")}
           </button>
-          {/* Text command option for speech-impaired users */}
           <button
             onClick={() => setShowTextInput(!showTextInput)}
             className="min-h-touch min-w-touch rounded-2xl bg-secondary border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={t("Type a command", "کمانڈ ٹائپ کریں")}
+            aria-label={t("Type a command instead of speaking", "بولنے کی بجائے کمانڈ ٹائپ کریں")}
+            aria-expanded={showTextInput}
           >
             <Keyboard className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Text command input for mute/speech impaired */}
+        {/* Text command input */}
         {showTextInput && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             className="mt-2 flex gap-2"
+            role="search"
+            aria-label="Text command input"
           >
             <input
               value={textCommand}
@@ -183,10 +180,12 @@ const HomePage = () => {
               className="flex-1 min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               dir={language === "ur" ? "rtl" : "ltr"}
               autoFocus
+              aria-label="Type a voice command"
             />
             <button
               onClick={handleTextCommand}
               className="min-h-touch px-5 rounded-2xl bg-primary text-primary-foreground font-medium text-sm"
+              aria-label="Execute command"
             >
               {t("Go", "چلو")}
             </button>
@@ -194,20 +193,22 @@ const HomePage = () => {
         )}
       </header>
 
-      {/* Voice feedback */}
+      {/* Voice feedback - announced to screen readers */}
       {voiceFeedback && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="mx-5 mb-2 p-3 rounded-2xl bg-primary/10 border border-primary/20 text-sm text-primary font-medium text-center"
+          role="status"
+          aria-live="assertive"
         >
           {voiceFeedback}
         </motion.div>
       )}
 
       {/* Feature Grid */}
-      <div className="flex-1 px-4 overflow-y-auto">
-        <div className="grid grid-cols-2 gap-3">
+      <nav className="flex-1 px-4 overflow-y-auto" aria-label="SOFI Features">
+        <div className="grid grid-cols-2 gap-3" role="list">
           {features.map((feat, i) => (
             <motion.button
               key={feat.path}
@@ -219,9 +220,10 @@ const HomePage = () => {
                 navigate(feat.path);
               }}
               className={`flex flex-col items-center justify-center gap-2.5 p-4 rounded-3xl border-2 ${feat.border} bg-card shadow-card min-h-[120px] hover:scale-[1.02] active:scale-[0.97] transition-all`}
-              aria-label={feat.label}
+              aria-label={`${feat.label} — ${feat.sublabel}`}
+              role="listitem"
             >
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${feat.bg}`}>
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${feat.bg}`} aria-hidden="true">
                 <feat.icon className={`w-7 h-7 ${feat.iconColor}`} />
               </div>
               <div className="text-center">
@@ -238,19 +240,19 @@ const HomePage = () => {
         <button
           onClick={() => navigate("/caregiver")}
           className="w-full mt-4 mb-4 py-4 px-5 rounded-2xl bg-card border-2 border-border text-foreground font-medium text-left flex items-center justify-between shadow-card hover:bg-secondary/50 transition-colors"
+          aria-label={t("Open Caregiver Dashboard", "نگہداشت کنندہ ڈیش بورڈ کھولیں")}
         >
           <span>{t("Caregiver Dashboard", "نگہداشت کنندہ ڈیش بورڈ")}</span>
-          <span className="text-muted-foreground">→</span>
+          <span className="text-muted-foreground" aria-hidden="true">→</span>
         </button>
-      </div>
+      </nav>
 
       {/* Big Central Mic Button */}
       <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30">
-        {/* Pulse rings when listening */}
         {isListening && (
           <>
-            <div className="absolute inset-0 w-20 h-20 -m-2 rounded-full bg-emergency/20 animate-pulse-ring" />
-            <div className="absolute inset-0 w-20 h-20 -m-2 rounded-full bg-emergency/10 animate-pulse-ring" style={{ animationDelay: "0.5s" }} />
+            <div className="absolute inset-0 w-20 h-20 -m-2 rounded-full bg-emergency/20 animate-pulse-ring" aria-hidden="true" />
+            <div className="absolute inset-0 w-20 h-20 -m-2 rounded-full bg-emergency/10 animate-pulse-ring" style={{ animationDelay: "0.5s" }} aria-hidden="true" />
           </>
         )}
         <button
@@ -261,12 +263,13 @@ const HomePage = () => {
               ? "bg-emergency text-emergency-foreground scale-110"
               : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-2xl"
           } disabled:opacity-30`}
-          aria-label={isListening ? t("Stop listening", "سننا بند کریں") : t("Voice command", "آواز کمانڈ")}
+          aria-label={isListening ? t("Stop listening", "سننا بند کریں") : t("Press to give a voice command", "آواز کمانڈ دینے کے لیے دبائیں")}
+          aria-live="polite"
         >
           {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-8 h-8" />}
         </button>
         {isListening && (
-          <p className="text-xs text-center mt-2 text-emergency font-semibold animate-pulse">
+          <p className="text-xs text-center mt-2 text-emergency font-semibold animate-pulse" aria-live="assertive">
             {t("Listening...", "سن رہی ہے...")}
           </p>
         )}
