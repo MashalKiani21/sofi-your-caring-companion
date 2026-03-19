@@ -5,9 +5,17 @@ import { DISABILITY_OPTIONS, type DisabilityType, type AccessibilityMode } from 
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   EyeOff, EarOff, Accessibility, MicOff, Brain, Heart, User, 
-  ArrowRight, ArrowLeft, Check, Volume2, Type, Sun
+  ArrowRight, ArrowLeft, Check, Mic
 } from "lucide-react";
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const iconMap: Record<string, any> = {
   "eye-off": EyeOff,
@@ -19,9 +27,13 @@ const iconMap: Record<string, any> = {
   "user": User,
 };
 
+const TOTAL_STEPS = 3;
+
 const ProfileSetup = () => {
   const [step, setStep] = useState(0);
   const [selectedDisability, setSelectedDisability] = useState<DisabilityType | null>(null);
+  const [medicalInfo, setMedicalInfo] = useState("");
+  const [notifications, setNotifications] = useState("all");
   const navigate = useNavigate();
   const { t, speak, setDisabilityType, setMode, setFontSize, setHighContrast, language } = useAccessibility();
 
@@ -43,8 +55,15 @@ const ProfileSetup = () => {
     if (step === 1) {
       speak(
         t(
-          "Accessibility preferences have been configured based on your selection. Review the settings and press Start Using SOFI to continue.",
-          "آپ کے انتخاب کی بنیاد پر رسائی کی ترجیحات ترتیب دی گئی ہیں۔ سیٹنگز دیکھیں اور سوفی استعمال شروع کریں دبائیں۔"
+          "Step 2. Enter your name and personal details.",
+          "مرحلہ 2۔ اپنا نام اور ذاتی تفصیلات درج کریں۔"
+        )
+      );
+    } else if (step === 2) {
+      speak(
+        t(
+          "Step 3. Medical information. You can optionally enter your conditions, medications, and allergies. Then choose your notification preferences and complete setup.",
+          "مرحلہ 3۔ طبی معلومات۔ آپ اختیاری طور پر اپنی حالت، ادویات اور الرجی درج کر سکتے ہیں۔"
         )
       );
     }
@@ -58,13 +77,8 @@ const ProfileSetup = () => {
     }
   };
 
-  const finishSetup = () => {
-    if (!selectedDisability) {
-      toast.error(t("Please select an option", "براہ کرم ایک آپشن منتخب کریں"));
-      speak(t("Please select your condition first.", "براہ کرم پہلے اپنی حالت منتخب کریں۔"));
-      return;
-    }
-
+  const applyAccessibilitySettings = () => {
+    if (!selectedDisability) return;
     setDisabilityType(selectedDisability);
 
     const modeMap: Record<DisabilityType, AccessibilityMode> = {
@@ -84,43 +98,60 @@ const ProfileSetup = () => {
     } else if (selectedDisability === "motor") {
       setFontSize("large");
     }
+  };
 
+  const finishSetup = () => {
+    applyAccessibilitySettings();
     speak(t(
-      "Profile setup complete! Taking you to your companion.",
-      "پروفائل سیٹ اپ مکمل! آپ کے ساتھی کی طرف لے جا رہے ہیں۔"
+      "Profile setup complete! Taking you to your home screen.",
+      "پروفائل سیٹ اپ مکمل! آپ کی ہوم اسکرین کی طرف لے جا رہے ہیں۔"
     ));
     toast.success(t("Profile setup complete!", "پروفائل سیٹ اپ مکمل!"));
     navigate("/home");
+  };
+
+  const handleNext = () => {
+    if (step === 0 && !selectedDisability) {
+      toast.error(t("Please select an option", "براہ کرم ایک آپشن منتخب کریں"));
+      speak(t("Please select your condition first.", "براہ کرم پہلے اپنی حالت منتخب کریں۔"));
+      return;
+    }
+    if (step < TOTAL_STEPS - 1) {
+      setStep(step + 1);
+    } else {
+      finishSetup();
+    }
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-background" role="main" aria-label="Profile setup">
       {/* Header */}
       <header className="flex items-center p-4 gap-3" role="banner">
-        <button
-          onClick={() => step > 0 ? setStep(step - 1) : navigate("/auth")}
-          className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary transition-colors"
-          aria-label={step > 0 ? "Go to previous step" : "Go back to login"}
-        >
-          <ArrowLeft className="w-5 h-5 text-foreground" />
-        </button>
+        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center" aria-hidden="true">
+          <Mic className="w-5 h-5 text-primary" />
+        </div>
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-foreground">{t("Profile Setup", "پروفائل سیٹ اپ")}</h1>
+          <h1 className="text-xl font-bold text-foreground">{t("Set Up Your Profile", "اپنا پروفائل بنائیں")}</h1>
           <p className="text-sm text-muted-foreground" aria-live="polite">
-            {t("Step", "مرحلہ")} {step + 1} / 2
+            {t("Step", "مرحلہ")} {step + 1} {t("of", "از")} {TOTAL_STEPS}
           </p>
         </div>
       </header>
 
-      {/* Progress bar */}
-      <div className="px-6" role="progressbar" aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={2} aria-label={`Step ${step + 1} of 2`}>
-        <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-          <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${((step + 1) / 2) * 100}%` }} />
-        </div>
+      {/* Progress bar - segmented like the image */}
+      <div className="px-6 flex gap-2" role="progressbar" aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-label={`Step ${step + 1} of ${TOTAL_STEPS}`}>
+        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+          <div key={i} className="flex-1 h-1.5 rounded-full overflow-hidden bg-secondary">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${i <= step ? "bg-primary w-full" : "w-0"}`}
+            />
+          </div>
+        ))}
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <AnimatePresence mode="wait">
+          {/* Step 1: Disability selection */}
           {step === 0 && (
             <motion.div
               key="step0"
@@ -131,9 +162,9 @@ const ProfileSetup = () => {
               role="region"
               aria-label="Select your condition"
             >
-              <div className="text-center mb-6">
+              <div className="mb-4">
                 <h2 className="text-2xl font-bold text-foreground">{t("How can SOFI help you?", "سوفی آپ کی کیسے مدد کر سکتی ہے؟")}</h2>
-                <p className="text-muted-foreground mt-2">{t("Select your condition so we can customize your experience", "اپنی حالت منتخب کریں تاکہ ہم آپ کا تجربہ بہتر بنائیں")}</p>
+                <p className="text-muted-foreground mt-1">{t("Select your condition so we can customize your experience", "اپنی حالت منتخب کریں تاکہ ہم آپ کا تجربہ بہتر بنائیں")}</p>
               </div>
 
               <div className="grid gap-3" role="radiogroup" aria-label="Disability type selection">
@@ -175,6 +206,7 @@ const ProfileSetup = () => {
             </motion.div>
           )}
 
+          {/* Step 2: Personal Info */}
           {step === 1 && (
             <motion.div
               key="step1"
@@ -183,48 +215,94 @@ const ProfileSetup = () => {
               exit={{ opacity: 0, x: -50 }}
               className="space-y-6"
               role="region"
-              aria-label="Accessibility preferences review"
+              aria-label="Personal information"
             >
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-foreground">{t("Accessibility Preferences", "رسائی کی ترجیحات")}</h2>
-                <p className="text-muted-foreground mt-2">{t("We've pre-configured settings for you. Adjust as needed.", "ہم نے آپ کے لیے سیٹنگز پہلے سے بنا دی ہیں۔")}</p>
+              <div className="mb-4">
+                <h2 className="text-2xl font-bold text-foreground">{t("Personal Info", "ذاتی معلومات")}</h2>
+                <p className="text-muted-foreground mt-1">{t("Tell us a bit about yourself", "ہمیں اپنے بارے میں بتائیں")}</p>
               </div>
 
               <div className="space-y-4">
-                <div className="p-5 rounded-2xl bg-card shadow-card" role="status">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Volume2 className="w-5 h-5 text-primary" aria-hidden="true" />
-                    <p className="font-semibold text-foreground">{t("Voice Control", "آواز کنٹرول")}</p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedDisability === "visual" || selectedDisability === "motor"
-                      ? t("Voice control is enabled for hands-free navigation.", "آواز کنٹرول فعال ہے۔")
-                      : t("Voice control available. Tap the mic to use.", "آواز کنٹرول دستیاب ہے۔")}
-                  </p>
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-2 block">{t("Full Name", "پورا نام")}</label>
+                  <input
+                    type="text"
+                    placeholder={t("Enter your name", "اپنا نام درج کریں")}
+                    className="w-full min-h-touch px-4 rounded-2xl border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    dir={language === "ur" ? "rtl" : "ltr"}
+                    aria-label={t("Full name", "پورا نام")}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-2 block">{t("Age", "عمر")}</label>
+                  <input
+                    type="number"
+                    placeholder={t("Your age", "آپ کی عمر")}
+                    className="w-full min-h-touch px-4 rounded-2xl border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    aria-label={t("Age", "عمر")}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-2 block">{t("Blood Type (optional)", "خون کی قسم (اختیاری)")}</label>
+                  <Select>
+                    <SelectTrigger className="min-h-touch rounded-2xl" aria-label={t("Blood type", "خون کی قسم")}>
+                      <SelectValue placeholder={t("Select blood type", "خون کی قسم منتخب کریں")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(bt => (
+                        <SelectItem key={bt} value={bt}>{bt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 3: Medical Info (from image reference) */}
+          {step === 2 && (
+            <motion.div
+              key="step2"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              className="space-y-6"
+              role="region"
+              aria-label="Medical information"
+            >
+              <div className="mb-4">
+                <h2 className="text-2xl font-bold text-foreground">{t("Medical Info", "طبی معلومات")}</h2>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-2 block">
+                    {t("Medical Information (optional)", "طبی معلومات (اختیاری)")}
+                  </label>
+                  <Textarea
+                    value={medicalInfo}
+                    onChange={(e) => setMedicalInfo(e.target.value)}
+                    placeholder={t("Conditions, medications, allergies...", "بیماریاں، ادویات، الرجی...")}
+                    className="min-h-[120px] rounded-2xl border-primary/30 focus:border-primary"
+                    dir={language === "ur" ? "rtl" : "ltr"}
+                    aria-label={t("Medical information", "طبی معلومات")}
+                  />
                 </div>
 
-                <div className="p-5 rounded-2xl bg-card shadow-card" role="status">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Type className="w-5 h-5 text-primary" aria-hidden="true" />
-                    <p className="font-semibold text-foreground">{t("Text Size", "متن کا سائز")}</p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedDisability === "visual" || selectedDisability === "cognitive"
-                      ? t("Extra large text enabled for better readability.", "بہتر پڑھنے کے لیے بہت بڑا متن۔")
-                      : t("Standard text size. Can be changed in settings.", "معیاری سائز۔ سیٹنگز میں تبدیل کریں۔")}
-                  </p>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-card shadow-card" role="status">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Sun className="w-5 h-5 text-primary" aria-hidden="true" />
-                    <p className="font-semibold text-foreground">{t("High Contrast", "زیادہ کنٹراسٹ")}</p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedDisability === "visual"
-                      ? t("High contrast mode enabled.", "زیادہ کنٹراسٹ موڈ فعال ہے۔")
-                      : t("Normal contrast. Can be toggled in settings.", "نارمل کنٹراسٹ۔ سیٹنگز میں تبدیل کریں۔")}
-                  </p>
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-2 block">
+                    {t("Notifications", "اطلاعات")}
+                  </label>
+                  <Select value={notifications} onValueChange={setNotifications}>
+                    <SelectTrigger className="min-h-touch rounded-2xl" aria-label={t("Notification preference", "اطلاعات کی ترجیح")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("All Notifications", "تمام اطلاعات")}</SelectItem>
+                      <SelectItem value="important">{t("Important Only", "صرف اہم")}</SelectItem>
+                      <SelectItem value="none">{t("None", "کوئی نہیں")}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </motion.div>
@@ -232,17 +310,26 @@ const ProfileSetup = () => {
         </AnimatePresence>
       </div>
 
-      {/* Bottom button */}
-      <div className="p-6" role="contentinfo">
+      {/* Bottom buttons */}
+      <div className="p-6 flex items-center gap-3" role="contentinfo">
+        {step > 0 && (
+          <button
+            onClick={() => setStep(step - 1)}
+            className="min-h-touch min-w-touch rounded-2xl border border-border flex items-center justify-center hover:bg-secondary transition-colors"
+            aria-label={t("Go back", "واپس جائیں")}
+          >
+            <ArrowLeft className="w-5 h-5 text-foreground" />
+          </button>
+        )}
         <button
-          onClick={() => step === 0 ? setStep(1) : finishSetup()}
+          onClick={handleNext}
           disabled={step === 0 && !selectedDisability}
-          className="w-full min-h-touch bg-primary text-primary-foreground rounded-2xl font-semibold text-lg flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          aria-label={step === 0 ? "Continue to accessibility preferences" : "Finish setup and start using SOFI"}
+          className="flex-1 min-h-touch bg-primary text-primary-foreground rounded-2xl font-semibold text-lg flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          aria-label={step === TOTAL_STEPS - 1 ? t("Complete setup", "سیٹ اپ مکمل کریں") : t("Continue", "جاری رکھیں")}
         >
-          {step === 0
-            ? <>{t("Continue", "جاری رکھیں")} <ArrowRight className="w-5 h-5" /></>
-            : <>{t("Start Using SOFI", "سوفی استعمال شروع کریں")} <Check className="w-5 h-5" /></>
+          {step === TOTAL_STEPS - 1
+            ? <>{t("Complete Setup", "سیٹ اپ مکمل کریں")} 🌿</>
+            : <>{t("Continue", "جاری رکھیں")} <ArrowRight className="w-5 h-5" /></>
           }
         </button>
       </div>
