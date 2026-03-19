@@ -82,7 +82,7 @@ const NavigationPage = () => {
   const initMap = useCallback(() => {
     if (!mapRef.current || !(window as any).google?.maps || !currentLocation) return;
 
-    const map = new google.maps.Map(mapRef.current, {
+    const map = new (window as any).(window as any).google.maps.Map(mapRef.current, {
       center: currentLocation,
       zoom: 15,
       disableDefaultUI: true,
@@ -97,12 +97,12 @@ const NavigationPage = () => {
     mapInstanceRef.current = map;
 
     // Add current location marker
-    new google.maps.Marker({
+    new (window as any).google.maps.Marker({
       position: currentLocation,
       map,
       title: t("You are here", "آپ یہاں ہیں"),
       icon: {
-        path: google.maps.SymbolPath.CIRCLE,
+        path: (window as any).google.maps.SymbolPath.CIRCLE,
         scale: 10,
         fillColor: "#2563EB",
         fillOpacity: 1,
@@ -111,7 +111,7 @@ const NavigationPage = () => {
       },
     });
 
-    directionsRendererRef.current = new google.maps.DirectionsRenderer({
+    directionsRendererRef.current = new (window as any).(window as any).google.maps.DirectionsRenderer({
       map,
       suppressMarkers: false,
       polylineOptions: { strokeColor: "#2563EB", strokeWeight: 5 },
@@ -136,15 +136,15 @@ const NavigationPage = () => {
 
     speak(t(`Finding route to ${destination}`, `${destination} تک راستہ تلاش کر رہے ہیں`));
 
-    const directionsService = new google.maps.DirectionsService();
+    const directionsService = new (window as any).(window as any).google.maps.DirectionsService();
     directionsService.route(
       {
         origin: currentLocation,
         destination: destination,
-        travelMode: google.maps.TravelMode.DRIVING,
+        travelMode: (window as any).google.maps.TravelMode.DRIVING,
       },
       (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
+        if (status === (window as any).google.maps.DirectionsStatus.OK && result) {
           setDirections(result);
           setIsNavigating(true);
           setCurrentStepIndex(0);
