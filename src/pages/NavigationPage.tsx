@@ -18,11 +18,11 @@ const NavigationPage = () => {
   const [destination, setDestination] = useState("");
   const [isNavigating, setIsNavigating] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [directions, setDirections] = useState<any>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const directionsRendererRef = useRef<any>(null);
 
   const [recentDestinations] = useState([
     { name: t("City Hospital", "شہر ہسپتال"), address: "Main Boulevard, Lahore" },
