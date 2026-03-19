@@ -74,13 +74,13 @@ const NavigationPage = () => {
 
   // Init map when location is available
   useEffect(() => {
-    if (currentLocation && window.google?.maps && mapRef.current && !mapInstanceRef.current) {
+    if (currentLocation && (window as any).google?.maps && mapRef.current && !mapInstanceRef.current) {
       initMap();
     }
   }, [currentLocation]);
 
   const initMap = useCallback(() => {
-    if (!mapRef.current || !window.google?.maps || !currentLocation) return;
+    if (!mapRef.current || !(window as any).google?.maps || !currentLocation) return;
 
     const map = new google.maps.Map(mapRef.current, {
       center: currentLocation,
@@ -129,7 +129,7 @@ const NavigationPage = () => {
       return;
     }
 
-    if (!window.google?.maps || !currentLocation) {
+    if (!(window as any).google?.maps || !currentLocation) {
       speak(t("Map is still loading. Please wait.", "نقشہ ابھی لوڈ ہو رہا ہے۔ براہ کرم انتظار کریں۔"));
       return;
     }
