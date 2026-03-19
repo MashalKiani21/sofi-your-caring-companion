@@ -82,7 +82,7 @@ const NavigationPage = () => {
   const initMap = useCallback(() => {
     if (!mapRef.current || !(window as any).google?.maps || !currentLocation) return;
 
-    const map = new (window as any).(window as any).google.maps.Map(mapRef.current, {
+    const map = new (window as any).google.maps.Map(mapRef.current, {
       center: currentLocation,
       zoom: 15,
       disableDefaultUI: true,
@@ -111,7 +111,7 @@ const NavigationPage = () => {
       },
     });
 
-    directionsRendererRef.current = new (window as any).(window as any).google.maps.DirectionsRenderer({
+    directionsRendererRef.current = new (window as any).google.maps.DirectionsRenderer({
       map,
       suppressMarkers: false,
       polylineOptions: { strokeColor: "#2563EB", strokeWeight: 5 },
@@ -136,7 +136,7 @@ const NavigationPage = () => {
 
     speak(t(`Finding route to ${destination}`, `${destination} تک راستہ تلاش کر رہے ہیں`));
 
-    const directionsService = new (window as any).(window as any).google.maps.DirectionsService();
+    const directionsService = new (window as any).google.maps.DirectionsService();
     directionsService.route(
       {
         origin: currentLocation,
