@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Plus, Trash2, Edit, Save, Mic, MicOff, X, FileText, Volume2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Edit, Save, X, FileText, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ const NotesPage = () => {
   const navigate = useNavigate();
   const { t, speak, language, disabilityType } = useAccessibility();
   const { user } = useAuth();
+  const { registerPageHandler, isListening } = useVoiceContext();
   const [notes, setNotes] = useState<NoteData[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
@@ -29,27 +30,20 @@ const NotesPage = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
-  const [voiceTarget, setVoiceTarget] = useState<"title" | "content" | null>(null);
 
   usePageAnnounce("Notes", "نوٹس");
 
-  const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
-    language,
-    onResult: (text) => {
-      if (voiceTarget === "title") {
-        setNewTitle(text);
-      } else if (voiceTarget === "content") {
-        setNewContent((prev) => (prev ? prev + " " + text : text));
-      } else {
-        // Default: create new note from voice
-        setNewTitle(text.slice(0, 50));
-        setNewContent(text);
-        setShowAdd(true);
-        speak(t("Note captured! Review and save.", "نوٹ لیا! جائزہ لیں اور محفوظ کریں۔"));
-      }
-      setVoiceTarget(null);
-    },
-  });
+  // Register page-specific voice handler: voice creates notes
+  useEffect(() => {
+    const unregister = registerPageHandler((text: string) => {
+      setNewTitle(text.slice(0, 50));
+      setNewContent(text);
+      setShowAdd(true);
+      speak(t("Note captured! Review and save.", "نوٹ لیا! جائزہ لیں اور محفوظ کریں۔"));
+      return true;
+    });
+    return unregister;
+  }, [registerPageHandler, speak, t]);
 
   useEffect(() => {
     if (user) loadNotes();
@@ -74,14 +68,6 @@ const NotesPage = () => {
   const addNote = async () => {
     if (!newTitle || !user) return;
     try {
-      /**
-       * Notes are stored in PostgreSQL via Lovable Cloud.
-       * In a Capacitor build, these notes sync to the cloud so they
-       * persist across devices — similar to Google Keep.
-       * 
-       * PLACEHOLDER: For offline-first support, implement local SQLite
-       * storage with background sync via @capacitor-community/sqlite
-       */
       const { error } = await supabase.from("notes").insert({
         title: newTitle,
         content: newContent,
@@ -122,13 +108,6 @@ const NotesPage = () => {
     }
   };
 
-  const startVoiceFor = (target: "title" | "content") => {
-    setVoiceTarget(target);
-    startListening();
-    speak(t(`Speak your ${target}`, target === "title" ? "عنوان بولیں" : "مواد بولیں"));
-  };
-
-  /** Read note aloud for visually impaired users */
   const readNoteAloud = (note: NoteData) => {
     speak(`${note.title}. ${note.content || ""}`);
   };
@@ -140,45 +119,26 @@ const NotesPage = () => {
           <button onClick={() => navigate("/home")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
-          <h1 className="text-xl font-bold text-foreground">{t("Notes", "نوٹس")}</h1>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">{t("Notes", "نوٹس")}</h1>
+            <p className="text-sm text-muted-foreground">
+              {isListening ? t("Speak to create a note!", "نوٹ بنانے کے لیے بولیں!") : t("Voice-enabled", "آواز فعال")}
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => { setVoiceTarget(null); isListening ? stopListening() : startListening(); }}
-            disabled={!isSupported}
-            className={`min-h-touch min-w-touch rounded-xl flex items-center justify-center transition-colors ${
-              isListening ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
-            } disabled:opacity-30`}
-            aria-label={t("Voice note", "آواز نوٹ")}
-          >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
-          <button onClick={() => setShowAdd(!showAdd)} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            {showAdd ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-          </button>
-        </div>
+        <button onClick={() => setShowAdd(!showAdd)} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          {showAdd ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         <AnimatePresence>
           {showAdd && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="p-4 rounded-2xl bg-card shadow-card space-y-3">
-              <div className="flex gap-2">
-                <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={t("Title...", "عنوان...")}
-                  className="flex-1 min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
-                <button onClick={() => startVoiceFor("title")} disabled={!isSupported}
-                  className="min-h-touch min-w-touch rounded-xl bg-secondary flex items-center justify-center disabled:opacity-30">
-                  <Mic className="w-4 h-4 text-foreground" />
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} placeholder={t("Content (voice or text)...", "مواد (آواز یا ٹیکسٹ)...")}
-                  className="flex-1 min-h-[100px] px-4 py-3 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
-                <button onClick={() => startVoiceFor("content")} disabled={!isSupported}
-                  className="min-h-touch min-w-touch rounded-xl bg-secondary flex items-center justify-center self-start disabled:opacity-30">
-                  <Mic className="w-4 h-4 text-foreground" />
-                </button>
-              </div>
+              <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={t("Title (or just speak)...", "عنوان (یا بس بولیں)...")}
+                className="w-full min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+              <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} placeholder={t("Content...", "مواد...")}
+                className="w-full min-h-[100px] px-4 py-3 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
               <button onClick={addNote} disabled={!newTitle} className="w-full min-h-touch bg-primary text-primary-foreground rounded-2xl font-semibold disabled:opacity-50">
                 {t("Save Note", "نوٹ محفوظ کریں")}
               </button>
@@ -194,7 +154,7 @@ const NotesPage = () => {
           <div className="text-center py-12">
             <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground">{t("No notes yet", "ابھی کوئی نوٹ نہیں")}</p>
-            <p className="text-sm text-muted-foreground mt-1">{t("Tap + or use voice to create one", "شامل کرنے کے لیے + دبائیں یا آواز استعمال کریں")}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t("Just speak to create a note!", "نوٹ بنانے کے لیے بس بولیں!")}</p>
           </div>
         ) : (
           notes.map((note) => (
@@ -202,12 +162,9 @@ const NotesPage = () => {
               <div className="flex items-start justify-between mb-2">
                 <h3 className="font-semibold text-foreground">{note.title}</h3>
                 <div className="flex gap-1">
-                  {/* Read aloud for visually impaired */}
-                  {disabilityType === "visual" && (
-                    <button onClick={() => readNoteAloud(note)} className="p-2 rounded-lg hover:bg-primary/10" aria-label="Read aloud">
-                      <Volume2 className="w-4 h-4 text-primary" />
-                    </button>
-                  )}
+                  <button onClick={() => readNoteAloud(note)} className="p-2 rounded-lg hover:bg-primary/10" aria-label="Read aloud">
+                    <Volume2 className="w-4 h-4 text-primary" />
+                  </button>
                   <button onClick={() => { setEditing(note.id); setEditContent(note.content || ""); }} className="p-2 rounded-lg hover:bg-secondary">
                     <Edit className="w-4 h-4 text-muted-foreground" />
                   </button>

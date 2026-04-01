@@ -1,105 +1,46 @@
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
-import { VoiceService } from "@/services/VoiceService";
-import { ContactService } from "@/services/ContactService";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Bot, Bell, Phone, MapPin, HeartPulse, ShieldAlert, Settings, Mic, MicOff, LogOut,
+  Bot, Bell, Phone, MapPin, HeartPulse, ShieldAlert, Settings, LogOut,
   MessageCircle, FileText, MessageSquare, Keyboard
 } from "lucide-react";
-import { toast } from "sonner";
 
 const HomePage = () => {
   const navigate = useNavigate();
   const { t, speak, language, disabilityType } = useAccessibility();
   const { user, signOut } = useAuth();
-  const [wakeWordActive, setWakeWordActive] = useState(false);
-  const [voiceFeedback, setVoiceFeedback] = useState("");
+  const { isListening } = useVoiceContext();
   const [showTextInput, setShowTextInput] = useState(false);
   const [textCommand, setTextCommand] = useState("");
 
   usePageAnnounce("Home", "ہوم");
 
-  const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
-    language,
-    onResult: (text) => handleVoiceCommand(text),
-  });
-
-  const handleVoiceCommand = async (text: string) => {
-    const intent = VoiceService.parseIntent(text);
-    const confirmation = VoiceService.getConfirmation(intent, language);
-    setVoiceFeedback(confirmation);
-    speak(confirmation);
-
-    switch (intent.type) {
-      case "navigate":
-        navigate(intent.page);
-        break;
-      case "call": {
-        if (user) {
-          try {
-            const contacts = await ContactService.getContacts(user.id);
-            const matches = ContactService.findByName(contacts, intent.contactName);
-            if (matches.length === 1) {
-              ContactService.makeCall(matches[0].phone);
-            } else if (matches.length > 1) {
-              const details = matches.map((c, i) => `${i + 1}. ${c.name} (${c.relationship}) - ${c.phone}`).join("\n");
-              const msg = t(
-                `I found ${matches.length} contacts named "${intent.contactName}":\n${details}\nPlease say the number or full name with relationship.`,
-                `"${intent.contactName}" نام کے ${matches.length} رابطے ملے:\n${details}\nبراہ کرم نمبر یا پورا نام بتائیں۔`
-              );
-              speak(msg);
-              toast.info(msg, { duration: 8000 });
-            } else {
-              const msg = t(`No contact named "${intent.contactName}" found.`, `"${intent.contactName}" نام کا کوئی رابطہ نہیں ملا۔`);
-              speak(msg);
-              toast.error(msg);
-            }
-          } catch {
-            navigate("/contacts");
-          }
-        }
-        break;
-      }
-      case "message":
-        navigate("/messages");
-        break;
-      case "whatsapp":
-        navigate("/whatsapp");
-        break;
-      case "reminder":
-        navigate("/reminders");
-        break;
-      case "emergency":
-        navigate("/emergency");
-        break;
-      default:
-        navigate("/companion");
-        break;
-    }
-
-    setTimeout(() => setVoiceFeedback(""), 4000);
-  };
-
+  // Text command fallback - uses VoiceService via global context
   const handleTextCommand = () => {
     if (textCommand.trim()) {
-      handleVoiceCommand(textCommand.trim());
+      // The global voice context handles intent parsing
+      // For text, we import VoiceService directly
+      import("@/services/VoiceService").then(({ VoiceService }) => {
+        const intent = VoiceService.parseIntent(textCommand.trim());
+        const confirmation = VoiceService.getConfirmation(intent, language);
+        speak(confirmation);
+        switch (intent.type) {
+          case "navigate": navigate(intent.page); break;
+          case "call": navigate("/contacts"); break;
+          case "message": navigate("/messages"); break;
+          case "whatsapp": navigate("/whatsapp"); break;
+          case "reminder": navigate("/reminders"); break;
+          case "emergency": navigate("/emergency"); break;
+          default: navigate("/companion"); break;
+        }
+      });
       setTextCommand("");
       setShowTextInput(false);
-    }
-  };
-
-  const toggleWakeWord = () => {
-    setWakeWordActive(!wakeWordActive);
-    if (!wakeWordActive) {
-      speak(t("Hey SOFI mode activated. Say Hey SOFI to start.", "ہے سوفی موڈ فعال۔ ہے سوفی بولیں۔"));
-      toast.success(t("Wake word active", "ویک ورڈ فعال"));
-    } else {
-      toast.info(t("Wake word disabled", "ویک ورڈ غیر فعال"));
     }
   };
 
@@ -126,7 +67,10 @@ const HomePage = () => {
               {t("Hello", "السلام علیکم")} 👋
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {t("How can SOFI help you?", "سوفی آپ کی کیسے مدد کرے؟")}
+              {isListening
+                ? t("I'm listening — just speak!", "میں سن رہی ہوں — بس بولیں!")
+                : t("How can SOFI help you?", "سوفی آپ کی کیسے مدد کرے؟")
+              }
             </p>
           </div>
           <button
@@ -138,28 +82,16 @@ const HomePage = () => {
           </button>
         </div>
 
-        {/* Wake word + text command toggle */}
-        <div className="flex gap-2 mt-3" role="toolbar" aria-label="Voice controls">
-          <button
-            onClick={toggleWakeWord}
-            className={`flex-1 py-3 px-4 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-              wakeWordActive
-                ? "bg-primary/10 text-primary border border-primary/20"
-                : "bg-secondary text-muted-foreground border border-border"
-            }`}
-            aria-pressed={wakeWordActive}
-            aria-label={wakeWordActive ? "Hey SOFI wake word is active" : "Activate Hey SOFI wake word"}
-          >
-            <Mic className="w-4 h-4" />
-            {wakeWordActive ? t("\"Hey SOFI\" ON", "\"ہے سوفی\" فعال") : t("\"Hey SOFI\"", "\"ہے سوفی\"")}
-          </button>
+        {/* Text command toggle */}
+        <div className="flex gap-2 mt-3" role="toolbar" aria-label="Input controls">
           <button
             onClick={() => setShowTextInput(!showTextInput)}
-            className="min-h-touch min-w-touch rounded-2xl bg-secondary border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={t("Type a command instead of speaking", "بولنے کی بجائے کمانڈ ٹائپ کریں")}
+            className="flex-1 py-3 px-4 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 bg-secondary text-muted-foreground border border-border transition-colors"
             aria-expanded={showTextInput}
+            aria-label={t("Type a command instead of speaking", "بولنے کی بجائے کمانڈ ٹائپ کریں")}
           >
-            <Keyboard className="w-5 h-5" />
+            <Keyboard className="w-4 h-4" />
+            {t("Type Command", "کمانڈ ٹائپ کریں")}
           </button>
         </div>
 
@@ -176,7 +108,7 @@ const HomePage = () => {
               value={textCommand}
               onChange={(e) => setTextCommand(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleTextCommand()}
-              placeholder={t("Type command: \"Call Ahmed\", \"Open notes\"...", "کمانڈ لکھیں: \"احمد کو کال کرو\"...")}
+              placeholder={t("Type: \"Call Ahmed\", \"Open notes\"...", "لکھیں: \"احمد کو کال کرو\"...")}
               className="flex-1 min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               dir={language === "ur" ? "rtl" : "ltr"}
               autoFocus
@@ -192,19 +124,6 @@ const HomePage = () => {
           </motion.div>
         )}
       </header>
-
-      {/* Voice feedback - announced to screen readers */}
-      {voiceFeedback && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mx-5 mb-2 p-3 rounded-2xl bg-primary/10 border border-primary/20 text-sm text-primary font-medium text-center"
-          role="status"
-          aria-live="assertive"
-        >
-          {voiceFeedback}
-        </motion.div>
-      )}
 
       {/* Feature Grid */}
       <nav className="flex-1 px-4 overflow-y-auto" aria-label="SOFI Features">
@@ -246,34 +165,6 @@ const HomePage = () => {
           <span className="text-muted-foreground" aria-hidden="true">→</span>
         </button>
       </nav>
-
-      {/* Big Central Mic Button */}
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30">
-        {isListening && (
-          <>
-            <div className="absolute inset-0 w-20 h-20 -m-2 rounded-full bg-emergency/20 animate-pulse-ring" aria-hidden="true" />
-            <div className="absolute inset-0 w-20 h-20 -m-2 rounded-full bg-emergency/10 animate-pulse-ring" style={{ animationDelay: "0.5s" }} aria-hidden="true" />
-          </>
-        )}
-        <button
-          onClick={() => isListening ? stopListening() : startListening()}
-          disabled={!isSupported}
-          className={`relative w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-all ${
-            isListening
-              ? "bg-emergency text-emergency-foreground scale-110"
-              : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-2xl"
-          } disabled:opacity-30`}
-          aria-label={isListening ? t("Stop listening", "سننا بند کریں") : t("Press to give a voice command", "آواز کمانڈ دینے کے لیے دبائیں")}
-          aria-live="polite"
-        >
-          {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-8 h-8" />}
-        </button>
-        {isListening && (
-          <p className="text-xs text-center mt-2 text-emergency font-semibold animate-pulse" aria-live="assertive">
-            {t("Listening...", "سن رہی ہے...")}
-          </p>
-        )}
-      </div>
     </div>
   );
 };
