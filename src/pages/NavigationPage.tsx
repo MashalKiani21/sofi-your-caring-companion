@@ -31,13 +31,30 @@ const NavigationPage = () => {
     { name: t("Home", "گھر"), address: "House 42, Block C, DHA", coords: [31.4697, 74.4078] as [number, number] },
   ]);
 
-  const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
-    language,
-    onResult: (text) => {
+  const { registerPageHandler, isListening } = useVoiceContext();
+
+  // Register page-specific voice handler for navigation destinations
+  useEffect(() => {
+    const unregister = registerPageHandler((text: string) => {
+      const lower = text.toLowerCase();
+      // Check for navigation-specific commands
+      if (lower.includes("navigate") || lower.includes("go to") || lower.includes("directions") ||
+          lower.includes("جاؤ") || lower.includes("نقشہ") || lower.includes("راستہ")) {
+        const dest = text.replace(/(?:navigate|go|directions|take me)\s+(?:to|for)?\s*/i, "").trim();
+        if (dest) {
+          setDestination(dest);
+          speak(t(`Searching for ${dest}`, `${dest} تلاش کر رہے ہیں`));
+        }
+        return true;
+      }
+      // Any speech on this page sets destination
       setDestination(text);
       speak(t(`Searching for ${text}`, `${text} تلاش کر رہے ہیں`));
-    },
-  });
+      return true;
+    });
+    return unregister;
+  }, [registerPageHandler, speak, t]);
+
 
   // Get current location
   useEffect(() => {
