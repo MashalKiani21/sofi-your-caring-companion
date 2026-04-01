@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Mic, MicOff, Send, ArrowLeft, Globe, Menu, Volume2, VolumeX } from "lucide-react";
+import { Send, ArrowLeft, Globe, Menu, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import type { ChatMessage } from "@/types/app";
@@ -19,15 +19,16 @@ const CompanionPage = () => {
   const navigate = useNavigate();
   const { t, speak, stopSpeaking, language, setLanguage } = useAccessibility();
   const { user } = useAuth();
+  const { registerPageHandler, isListening } = useVoiceContext();
 
-  const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
-    language,
-    onResult: (text) => {
-      setInput(text);
-      // Auto-send voice input
+  // Register page-specific voice handler: all voice input goes to chat
+  useEffect(() => {
+    const unregister = registerPageHandler((text: string) => {
       handleSend(text);
-    },
-  });
+      return true; // We handled it, don't let global handle it
+    });
+    return unregister;
+  }, [registerPageHandler, messages, isLoading]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,14 +44,14 @@ const CompanionPage = () => {
       id: "welcome",
       user_id: "system",
       role: "assistant",
-      content: "Hello! I'm SOFI, your AI companion. How can I help you today? You can speak or type in English or Urdu.\n\nسلام! میں سوفی ہوں، آپ کا AI ساتھی۔ میں آج آپ کی کیسے مدد کر سکتی ہوں؟",
+      content: "Hello! I'm SOFI, your AI companion. Just speak or type — I'm always listening.\n\nسلام! میں سوفی ہوں۔ بس بولیں یا لکھیں — میں ہمیشہ سن رہی ہوں۔",
       type: "text",
       timestamp: new Date(),
     };
     setMessages([welcome]);
-    if (!isMuted) speak(language === "ur" 
-      ? "سلام! میں سوفی ہوں۔ میں آپ کی کیسے مدد کر سکتی ہوں؟"
-      : "Hello! I'm SOFI. How can I help you today?");
+    if (!isMuted) speak(language === "ur"
+      ? "سلام! میں سوفی ہوں۔ بس بولیں، میں سن رہی ہوں۔"
+      : "Hello! I'm SOFI. Just speak, I'm listening.");
   }, []);
 
   const handleSend = useCallback(async (voiceText?: string) => {
@@ -82,7 +83,7 @@ const CompanionPage = () => {
 
       if (response.error) throw response.error;
 
-      const aiContent = response.data?.choices?.[0]?.message?.content || 
+      const aiContent = response.data?.choices?.[0]?.message?.content ||
         t("I'm sorry, I couldn't process that.", "معذرت، میں اسے سمجھ نہیں سکی۔");
 
       const aiMsg: ChatMessage = {
@@ -136,7 +137,7 @@ const CompanionPage = () => {
           <div>
             <h1 className="text-lg font-bold text-foreground">SOFI</h1>
             <p className="text-xs text-muted-foreground">
-              {isListening ? t("Listening...", "سن رہی ہے...") : t("AI Companion", "AI ساتھی")}
+              {isListening ? t("Listening — just speak!", "سن رہی ہے — بس بولیں!") : t("AI Companion", "AI ساتھی")}
             </p>
           </div>
         </div>
@@ -226,7 +227,6 @@ const CompanionPage = () => {
                 <span className="text-[10px] opacity-60">
                   {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </span>
-                {msg.type === "voice" && <Mic className="w-3 h-3 opacity-60" />}
               </div>
             </div>
           </motion.div>
@@ -245,27 +245,15 @@ const CompanionPage = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
+      {/* Input - text only, voice handled globally */}
       <div className="border-t border-border px-4 py-3 bg-card">
         <div className="flex items-center gap-2 max-w-3xl mx-auto">
-          <button
-            onClick={() => isListening ? stopListening() : startListening()}
-            disabled={!isSupported}
-            className={`min-h-touch min-w-touch rounded-2xl flex items-center justify-center transition-all ${
-              isListening
-                ? "bg-emergency text-emergency-foreground animate-pulse scale-110"
-                : "bg-secondary text-foreground hover:bg-secondary/80"
-            } disabled:opacity-30`}
-            aria-label={isListening ? t("Stop listening", "سننا بند کریں") : t("Start voice input", "آواز شروع کریں")}
-          >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder={t("Type a message...", "پیغام لکھیں...")}
+            placeholder={t("Type or just speak...", "لکھیں یا بس بولیں...")}
             className="flex-1 min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             dir={language === "ur" ? "rtl" : "ltr"}
           />

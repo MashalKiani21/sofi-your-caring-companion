@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 import { ContactService, type Contact } from "@/services/ContactService";
 import { MessagingService } from "@/services/MessagingService";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
-import { ArrowLeft, Phone, MessageSquare, Search, Plus, User, Trash2, X, Mic, MicOff } from "lucide-react";
-import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { ArrowLeft, Phone, MessageSquare, Search, Plus, User, Trash2, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
@@ -14,6 +14,7 @@ const ContactsPage = () => {
   const navigate = useNavigate();
   const { t, speak, language, disabilityType } = useAccessibility();
   const { user } = useAuth();
+  const { registerPageHandler, isListening } = useVoiceContext();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -24,10 +25,9 @@ const ContactsPage = () => {
 
   usePageAnnounce("Contacts", "رابطے");
 
-  const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
-    language,
-    onResult: (text) => {
-      // Voice search: if user says "call ahmed" we search for ahmed
+  // Register page-specific voice handler
+  useEffect(() => {
+    const unregister = registerPageHandler((text: string) => {
       const callMatch = text.match(/(?:call|کال)\s+(.+)/i);
       if (callMatch) {
         const name = callMatch[1].trim();
@@ -37,19 +37,19 @@ const ContactsPage = () => {
           ContactService.makeCall(matches[0].phone);
         } else if (matches.length > 1) {
           const details = matches.map((c, i) => `${i + 1}. ${c.name} (${c.relationship})`).join(", ");
-          speak(t(
-            `Multiple contacts found: ${details}. Which one?`,
-            `کئی رابطے ملے: ${details}۔ کون سا؟`
-          ));
-          toast.info(t(`Multiple matches: ${details}`, `کئی رابطے: ${details}`), { duration: 6000 });
+          speak(t(`Multiple contacts: ${details}. Which one?`, `کئی رابطے: ${details}۔ کون سا؟`));
         } else {
-          speak(t(`No contact named ${name} found`, `${name} نام کا کوئی رابطہ نہیں ملا`));
+          speak(t(`No contact named ${name}`, `${name} نام کا رابطہ نہیں ملا`));
         }
-      } else {
-        setSearch(text);
+        return true;
       }
-    },
-  });
+      // Use as search
+      setSearch(text);
+      speak(t(`Searching for ${text}`, `${text} تلاش کر رہے ہیں`));
+      return true;
+    });
+    return unregister;
+  }, [registerPageHandler, contacts, speak, t]);
 
   useEffect(() => {
     if (user) loadContacts();
@@ -91,25 +91,11 @@ const ContactsPage = () => {
 
   const handleCall = (contact: Contact) => {
     speak(t(`Calling ${contact.name}`, `${contact.name} کو کال کر رہے ہیں`));
-    /**
-     * PLACEHOLDER: Phone call execution
-     * In Capacitor, use: import { CallNumber } from '@capacitor-community/call-number';
-     * await CallNumber.call({ number: contact.phone, bypassAppChooser: false });
-     * 
-     * The web fallback opens a tel: link which works on mobile browsers.
-     */
     ContactService.makeCall(contact.phone);
   };
 
   const handleMessage = (contact: Contact) => {
     speak(t(`Messaging ${contact.name}`, `${contact.name} کو پیغام`));
-    /**
-     * PLACEHOLDER: SMS sending
-     * In Capacitor, use: import { SMS } from '@capacitor-community/sms';
-     * await SMS.send({ numbers: [contact.phone], text: '' });
-     * 
-     * Web fallback opens sms: link.
-     */
     MessagingService.sendSMS(contact.phone, "");
   };
 
@@ -122,41 +108,27 @@ const ContactsPage = () => {
           <button onClick={() => navigate("/home")} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl hover:bg-secondary">
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
-          <h1 className="text-xl font-bold text-foreground">{t("Contacts", "رابطے")}</h1>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">{t("Contacts", "رابطے")}</h1>
+            <p className="text-sm text-muted-foreground">
+              {isListening ? t("Say \"Call Ahmed\"", "بولیں \"احمد کو کال کرو\"") : t("Voice-enabled", "آواز فعال")}
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          {/**
-            * PLACEHOLDER: Import device contacts
-            * In Capacitor, use: import { Contacts } from '@capacitor-community/contacts';
-            * const result = await Contacts.getContacts({ projection: { name: true, phones: true } });
-            * This would allow syncing phone contacts into the SOFI app.
-            */}
-          <button onClick={() => setShowAdd(!showAdd)} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            {showAdd ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-          </button>
-        </div>
+        <button onClick={() => setShowAdd(!showAdd)} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          {showAdd ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+        </button>
       </header>
 
       <div className="px-4 py-3">
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("Search or say \"Call Ahmed\"...", "تلاش کریں یا بولیں \"احمد کو کال کرو\"...")}
-              className="w-full min-h-touch pl-11 pr-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <button
-            onClick={() => isListening ? stopListening() : startListening()}
-            disabled={!isSupported}
-            className={`min-h-touch min-w-touch rounded-2xl flex items-center justify-center transition-colors ${
-              isListening ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
-            } disabled:opacity-30`}
-          >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("Search or say \"Call Ahmed\"...", "تلاش کریں یا بولیں \"احمد کو کال کرو\"...")}
+            className="w-full min-h-touch pl-11 pr-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
         </div>
       </div>
 
@@ -185,7 +157,6 @@ const ContactsPage = () => {
           <div className="text-center py-12">
             <User className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground">{search ? t("No contacts match", "کوئی رابطہ نہیں ملا") : t("No contacts yet", "ابھی کوئی رابطہ نہیں")}</p>
-            <p className="text-sm text-muted-foreground mt-1">{t("Tap + to add a contact", "+ دبا کر رابطہ شامل کریں")}</p>
           </div>
         ) : (
           filtered.map((contact, i) => (

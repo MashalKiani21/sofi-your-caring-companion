@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
-import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
-import { ArrowLeft, MapPin, Mic, MicOff, Search, Navigation, Clock, Volume2 } from "lucide-react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
+import { ArrowLeft, MapPin, Search, Navigation, Clock, Volume2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import L from "leaflet";
@@ -31,13 +31,30 @@ const NavigationPage = () => {
     { name: t("Home", "گھر"), address: "House 42, Block C, DHA", coords: [31.4697, 74.4078] as [number, number] },
   ]);
 
-  const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
-    language,
-    onResult: (text) => {
+  const { registerPageHandler, isListening } = useVoiceContext();
+
+  // Register page-specific voice handler for navigation destinations
+  useEffect(() => {
+    const unregister = registerPageHandler((text: string) => {
+      const lower = text.toLowerCase();
+      // Check for navigation-specific commands
+      if (lower.includes("navigate") || lower.includes("go to") || lower.includes("directions") ||
+          lower.includes("جاؤ") || lower.includes("نقشہ") || lower.includes("راستہ")) {
+        const dest = text.replace(/(?:navigate|go|directions|take me)\s+(?:to|for)?\s*/i, "").trim();
+        if (dest) {
+          setDestination(dest);
+          speak(t(`Searching for ${dest}`, `${dest} تلاش کر رہے ہیں`));
+        }
+        return true;
+      }
+      // Any speech on this page sets destination
       setDestination(text);
       speak(t(`Searching for ${text}`, `${text} تلاش کر رہے ہیں`));
-    },
-  });
+      return true;
+    });
+    return unregister;
+  }, [registerPageHandler, speak, t]);
+
 
   // Get current location
   useEffect(() => {
@@ -304,16 +321,9 @@ const NavigationPage = () => {
               aria-label={t("Destination search", "منزل تلاش کریں")}
             />
           </div>
-          <button
-            onClick={() => (isListening ? stopListening() : startListening())}
-            disabled={!isSupported}
-            className={`min-h-touch min-w-touch rounded-2xl flex items-center justify-center transition-colors ${
-              isListening ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
-            } disabled:opacity-30`}
-            aria-label={t("Voice search", "آواز تلاش")}
-          >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
+          {isListening && (
+            <span className="text-xs text-primary font-medium">{t("Speak destination...", "منزل بولیں...")}</span>
+          )}
         </div>
 
         {destination.trim() && !isNavigating && (

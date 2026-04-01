@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 import { ReminderService, type ReminderData } from "@/services/ReminderService";
-import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
-import { ArrowLeft, Plus, Clock, Trash2, Bell, Check, Mic, MicOff, X, AlarmClock } from "lucide-react";
+import { ArrowLeft, Plus, Clock, Trash2, Bell, Check, X, AlarmClock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
@@ -13,6 +13,7 @@ const RemindersPage = () => {
   const navigate = useNavigate();
   const { t, speak, language } = useAccessibility();
   const { user } = useAuth();
+  const { registerPageHandler, isListening } = useVoiceContext();
   const [reminders, setReminders] = useState<ReminderData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -22,21 +23,32 @@ const RemindersPage = () => {
 
   usePageAnnounce("Reminders", "یاد دہانیاں");
 
-  const { isListening, startListening, stopListening, isSupported } = useVoiceRecognition({
-    language,
-    onResult: (text) => {
-      const parsed = ReminderService.parseVoiceReminder(text);
-      if (parsed) {
-        setNewTitle(parsed.title);
-        if (parsed.time) setNewTime(parsed.time);
-        setShowAdd(true);
-        speak(t(`Setting reminder: ${parsed.title}`, `یاد دہانی لگا رہے ہیں: ${parsed.title}`));
-      } else {
-        setNewTitle(text);
-        setShowAdd(true);
+  // Register page-specific voice handler for reminders
+  useEffect(() => {
+    const unregister = registerPageHandler((text: string) => {
+      const lower = text.toLowerCase();
+      // Check if it's a reminder-specific command
+      if (lower.includes("remind") || lower.includes("یاد") || lower.includes("alarm") || lower.includes("الارم")) {
+        const parsed = ReminderService.parseVoiceReminder(text);
+        if (parsed) {
+          setNewTitle(parsed.title);
+          if (parsed.time) setNewTime(parsed.time);
+          setShowAdd(true);
+          speak(t(`Setting reminder: ${parsed.title}`, `یاد دہانی لگا رہے ہیں: ${parsed.title}`));
+        } else {
+          setNewTitle(text);
+          setShowAdd(true);
+        }
+        return true; // Handled
       }
-    },
-  });
+      // If it's a general command on this page, still create a reminder from it
+      setNewTitle(text);
+      setShowAdd(true);
+      speak(t(`Creating reminder: ${text}`, `یاد دہانی بنا رہے ہیں: ${text}`));
+      return true;
+    });
+    return unregister;
+  }, [registerPageHandler, speak, t]);
 
   useEffect(() => {
     if (user) loadReminders();
@@ -69,25 +81,6 @@ const RemindersPage = () => {
       setShowAdd(false);
       speak(t("Reminder added!", "یاد دہانی شامل ہو گئی!"));
       toast.success(t("Reminder added", "یاد دہانی شامل"));
-      /**
-       * PLACEHOLDER: Set alarm on device clock/alarm app
-       * In Capacitor, use @capacitor-community/local-notifications:
-       * import { LocalNotifications } from '@capacitor/local-notifications';
-       * await LocalNotifications.schedule({
-       *   notifications: [{
-       *     title: newTitle,
-       *     body: 'SOFI Reminder',
-       *     id: Math.floor(Math.random() * 100000),
-       *     schedule: { at: new Date(newTime) },
-       *     sound: 'alarm.wav',
-       *     extra: { recurring: newRecurring }
-       *   }]
-       * });
-       * 
-       * For actual alarm clock integration on Android:
-       * Use @capacitor/intents to launch AlarmClock intent:
-       * intent.setAction(AlarmClock.ACTION_SET_ALARM)
-       */
     } catch (err) {
       toast.error(t("Failed to add reminder", "یاد دہانی شامل نہیں ہوئی"));
     }
@@ -121,30 +114,20 @@ const RemindersPage = () => {
           </button>
           <div>
             <h1 className="text-xl font-bold text-foreground">{t("Reminders", "یاد دہانیاں")}</h1>
-            <p className="text-sm text-muted-foreground">{t("Voice or text", "آواز یا ٹیکسٹ")}</p>
+            <p className="text-sm text-muted-foreground">
+              {isListening ? t("Say your reminder!", "اپنی یاد دہانی بولیں!") : t("Voice or text", "آواز یا ٹیکسٹ")}
+            </p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => isListening ? stopListening() : startListening()}
-            disabled={!isSupported}
-            className={`min-h-touch min-w-touch rounded-xl flex items-center justify-center transition-colors ${
-              isListening ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
-            } disabled:opacity-30`}
-            aria-label={t("Voice reminder", "آواز یاد دہانی")}
-          >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
-          <button onClick={() => setShowAdd(!showAdd)} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            {showAdd ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-          </button>
-        </div>
+        <button onClick={() => setShowAdd(!showAdd)} className="min-h-touch min-w-touch flex items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          {showAdd ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+        </button>
       </header>
 
       {/* Alarm integration hint */}
       <div className="mx-4 mt-3 p-3 rounded-2xl bg-accent border border-border flex items-center gap-2 text-sm text-muted-foreground">
         <AlarmClock className="w-4 h-4 shrink-0" />
-        <span>{t("Reminders will sync with your phone's alarm app when installed natively.", "یاد دہانیاں آپ کے فون کی الارم ایپ سے مطابقت رکھیں گی۔")}</span>
+        <span>{t("Just say \"Remind me to take medicine at 9 PM\"", "بس بولیں \"مجھے 9 بجے دوائی یاد دلائیں\"")}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -154,7 +137,7 @@ const RemindersPage = () => {
               <input
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder={t("Reminder title (or say it)...", "یاد دہانی کا عنوان (یا بولیں)...")}
+                placeholder={t("Reminder title (or just speak)...", "یاد دہانی کا عنوان (یا بس بولیں)...")}
                 className="w-full min-h-touch px-4 rounded-2xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <input
@@ -191,7 +174,7 @@ const RemindersPage = () => {
           <div className="text-center py-12">
             <Bell className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground">{t("No reminders yet", "ابھی کوئی یاد دہانی نہیں")}</p>
-            <p className="text-sm text-muted-foreground mt-1">{t("Tap + or say \"Remind me to take medicine at 9 PM\"", "+ دبائیں یا بولیں \"مجھے 9 بجے دوائی یاد دلائیں\"")}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t("Just say \"Remind me to take medicine at 9 PM\"", "بس بولیں \"مجھے 9 بجے دوائی یاد دلائیں\"")}</p>
           </div>
         ) : (
           reminders.map((rem, i) => (
