@@ -321,16 +321,9 @@ const NavigationPage = () => {
               aria-label={t("Destination search", "منزل تلاش کریں")}
             />
           </div>
-          <button
-            onClick={() => (isListening ? stopListening() : startListening())}
-            disabled={!isSupported}
-            className={`min-h-touch min-w-touch rounded-2xl flex items-center justify-center transition-colors ${
-              isListening ? "bg-emergency text-emergency-foreground animate-pulse" : "bg-secondary text-foreground"
-            } disabled:opacity-30`}
-            aria-label={t("Voice search", "آواز تلاش")}
-          >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
+          {isListening && (
+            <span className="text-xs text-primary font-medium">{t("Speak destination...", "منزل بولیں...")}</span>
+          )}
         </div>
 
         {destination.trim() && !isNavigating && (
