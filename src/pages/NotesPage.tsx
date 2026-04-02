@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVoiceContext } from "@/contexts/VoiceContext";
+import { useVoiceConfirmation } from "@/hooks/useVoiceConfirmation";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Plus, Trash2, Edit, Save, X, FileText, Volume2 } from "lucide-react";
@@ -23,6 +24,7 @@ const NotesPage = () => {
   const { t, speak, language, disabilityType } = useAccessibility();
   const { user } = useAuth();
   const { registerPageHandler, isListening } = useVoiceContext();
+  const { confirm } = useVoiceConfirmation();
   const [notes, setNotes] = useState<NoteData[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
@@ -33,7 +35,6 @@ const NotesPage = () => {
 
   usePageAnnounce("Notes", "نوٹس");
 
-  // Register page-specific voice handler: voice creates notes
   useEffect(() => {
     const unregister = registerPageHandler((text: string) => {
       setNewTitle(text.slice(0, 50));
@@ -51,11 +52,7 @@ const NotesPage = () => {
 
   const loadNotes = async () => {
     try {
-      const { data, error } = await supabase
-        .from("notes")
-        .select("*")
-        .eq("user_id", user!.id)
-        .order("updated_at", { ascending: false });
+      const { data, error } = await supabase.from("notes").select("*").eq("user_id", user!.id).order("updated_at", { ascending: false });
       if (error) throw error;
       setNotes(data || []);
     } catch (err) {
@@ -68,16 +65,10 @@ const NotesPage = () => {
   const addNote = async () => {
     if (!newTitle || !user) return;
     try {
-      const { error } = await supabase.from("notes").insert({
-        title: newTitle,
-        content: newContent,
-        user_id: user.id,
-      });
+      const { error } = await supabase.from("notes").insert({ title: newTitle, content: newContent, user_id: user.id });
       if (error) throw error;
       await loadNotes();
-      setNewTitle("");
-      setNewContent("");
-      setShowAdd(false);
+      setNewTitle(""); setNewContent(""); setShowAdd(false);
       speak(t("Note saved!", "نوٹ محفوظ!"));
       toast.success(t("Note saved", "نوٹ محفوظ"));
     } catch (err) {
@@ -97,11 +88,16 @@ const NotesPage = () => {
     }
   };
 
-  const deleteNote = async (id: string) => {
+  const deleteNote = async (note: NoteData) => {
+    const confirmed = await confirm(
+      `Delete note "${note.title}"? Say yes or no.`,
+      `نوٹ "${note.title}" حذف کریں؟ ہاں یا نہیں بولیں۔`
+    );
+    if (!confirmed) return;
     try {
-      const { error } = await supabase.from("notes").delete().eq("id", id);
+      const { error } = await supabase.from("notes").delete().eq("id", note.id);
       if (error) throw error;
-      setNotes((n) => n.filter((x) => x.id !== id));
+      setNotes((n) => n.filter((x) => x.id !== note.id));
       toast.success(t("Note deleted", "نوٹ حذف"));
     } catch (err) {
       toast.error(t("Delete failed", "حذف ناکام"));
@@ -168,7 +164,7 @@ const NotesPage = () => {
                   <button onClick={() => { setEditing(note.id); setEditContent(note.content || ""); }} className="p-2 rounded-lg hover:bg-secondary">
                     <Edit className="w-4 h-4 text-muted-foreground" />
                   </button>
-                  <button onClick={() => deleteNote(note.id)} className="p-2 rounded-lg hover:bg-destructive/10">
+                  <button onClick={() => deleteNote(note)} className="p-2 rounded-lg hover:bg-destructive/10">
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </button>
                 </div>

@@ -125,6 +125,36 @@ export type Database = {
         }
         Relationships: []
       }
+      navigation_history: {
+        Row: {
+          created_at: string
+          destination_address: string | null
+          destination_name: string
+          id: string
+          lat: number
+          lng: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          destination_address?: string | null
+          destination_name: string
+          id?: string
+          lat: number
+          lng: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          destination_address?: string | null
+          destination_name?: string
+          id?: string
+          lat?: number
+          lng?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           content: string | null

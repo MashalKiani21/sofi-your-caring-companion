@@ -19,12 +19,10 @@ import RemindersPage from "./pages/RemindersPage";
 import NotesPage from "./pages/NotesPage";
 import ContactsPage from "./pages/ContactsPage";
 import MessagesPage from "./pages/MessagesPage";
-import WhatsAppPage from "./pages/WhatsAppPage";
 import SettingsPage from "./pages/SettingsPage";
 import ResetPassword from "./pages/ResetPassword";
 import EmergencyPage from "./pages/EmergencyPage";
 import NavigationPage from "./pages/NavigationPage";
-import CaregiverPage from "./pages/CaregiverPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,12 +49,10 @@ const App = () => (
                   <Route path="/notes" element={<NotesPage />} />
                   <Route path="/contacts" element={<ContactsPage />} />
                   <Route path="/messages" element={<MessagesPage />} />
-                  <Route path="/whatsapp" element={<WhatsAppPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
                   <Route path="/emergency" element={<EmergencyPage />} />
                   <Route path="/navigation" element={<NavigationPage />} />
-                  <Route path="/caregiver" element={<CaregiverPage />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
                 <BottomNav />

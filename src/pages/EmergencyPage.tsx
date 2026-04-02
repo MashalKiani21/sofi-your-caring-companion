@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useVoiceConfirmation } from "@/hooks/useVoiceConfirmation";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, ShieldAlert, Phone, MapPin, X, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,6 +19,7 @@ const EmergencyPage = () => {
   const navigate = useNavigate();
   const { t, speak } = useAccessibility();
   const { user } = useAuth();
+  const { confirm } = useVoiceConfirmation();
   const [contacts, setContacts] = useState<EmergencyContactItem[]>([]);
   const [isEmergencyActive, setIsEmergencyActive] = useState(false);
   const [countdown, setCountdown] = useState(5);
@@ -26,7 +28,6 @@ const EmergencyPage = () => {
 
   useEffect(() => {
     if (user) fetchContacts();
-    // Try to get location
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setLocation(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`),
@@ -46,7 +47,13 @@ const EmergencyPage = () => {
     if (data) setContacts(data);
   };
 
-  const triggerSOS = () => {
+  const triggerSOS = async () => {
+    const confirmed = await confirm(
+      "Are you sure you want to activate Emergency SOS? Say yes or no.",
+      "کیا آپ ایمرجنسی SOS فعال کرنا چاہتے ہیں؟ ہاں یا نہیں بولیں۔"
+    );
+    if (!confirmed) return;
+
     setIsEmergencyActive(true);
     setCountdown(5);
     speak(t("Emergency activated. Sending alerts in 5 seconds. Tap cancel to abort.", "ایمرجنسی فعال۔ 5 سیکنڈ میں الرٹ بھیجے جائیں گے۔ منسوخ کرنے کے لیے ٹیپ کریں۔"));
@@ -67,7 +74,6 @@ const EmergencyPage = () => {
   const sendAlerts = async () => {
     speak(t("Sending emergency alerts now!", "ایمرجنسی الرٹ بھیج رہے ہیں!"));
 
-    // Log emergency event
     if (user) {
       await supabase.from("activity_logs").insert({
         user_id: user.id,
@@ -77,12 +83,9 @@ const EmergencyPage = () => {
       });
     }
 
-    // Simulate sending alerts to each contact
     for (const contact of contacts) {
       await new Promise(r => setTimeout(r, 500));
       setAlertsSent(prev => [...prev, contact.id]);
-      // TODO: Integrate with SMS API (Twilio) or Capacitor SMS plugin
-      // to actually send: `sms.send({ to: contact.phone, message: "Emergency! Location: " + location })`
     }
 
     toast.success(t("All emergency contacts notified!", "تمام ایمرجنسی رابطوں کو مطلع کر دیا گیا!"));
@@ -109,7 +112,7 @@ const EmergencyPage = () => {
           {!isEmergencyActive ? (
             <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-8 w-full">
               <p className="text-center text-muted-foreground max-w-xs">
-                {t("Press the SOS button to alert your emergency contacts with your location.", "SOS بٹن دبائیں تاکہ آپ کے ایمرجنسی رابطوں کو آپ کے مقام کے ساتھ مطلع کیا جائے۔")}
+                {t("Press the SOS button or say \"Emergency\" to alert your contacts.", "SOS بٹن دبائیں یا \"ایمرجنسی\" بولیں۔")}
               </p>
 
               <button
@@ -123,13 +126,11 @@ const EmergencyPage = () => {
                 </div>
               </button>
 
-              {/* Location */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="w-4 h-4" />
                 <span>{location}</span>
               </div>
 
-              {/* Emergency contacts list */}
               <div className="w-full max-w-sm space-y-2">
                 <p className="text-sm font-semibold text-foreground">{t("Emergency Contacts", "ایمرجنسی رابطے")} ({contacts.length}/5)</p>
                 {contacts.length === 0 && (
