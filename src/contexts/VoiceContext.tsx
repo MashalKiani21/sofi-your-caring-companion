@@ -170,7 +170,7 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
 
       case "whatsapp":
         speak(confirmation);
-        navigate("/whatsapp");
+        navigate("/messages");
         break;
 
       case "reminder":
