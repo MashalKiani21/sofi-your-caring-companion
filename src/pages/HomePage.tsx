@@ -47,7 +47,7 @@ const HomePage = () => {
         return t("SOFI is listening. Say a command anytime.", "سوفی سن رہی ہے۔ کسی بھی وقت کمانڈ بولیں۔");
       case "hearing":
         return t("Tap any feature below. Text commands available.", "نیچے کوئی فیچر ٹیپ کریں۔ ٹیکسٹ کمانڈ دستیاب ہے۔");
-      case "mobility":
+      case "motor":
         return t("Voice or large buttons — your choice!", "آواز یا بڑے بٹن — آپ کی مرضی!");
       case "cognitive":
         return t("Simple & clear. One step at a time.", "آسان اور واضح۔ ایک وقت میں ایک قدم۔");
