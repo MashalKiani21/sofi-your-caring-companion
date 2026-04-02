@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVoiceContext } from "@/contexts/VoiceContext";
+import { useVoiceConfirmation } from "@/hooks/useVoiceConfirmation";
 import { ContactService, type Contact } from "@/services/ContactService";
 import { MessagingService } from "@/services/MessagingService";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
@@ -15,6 +16,7 @@ const ContactsPage = () => {
   const { t, speak, language, disabilityType } = useAccessibility();
   const { user } = useAuth();
   const { registerPageHandler, isListening } = useVoiceContext();
+  const { confirm } = useVoiceConfirmation();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -25,7 +27,6 @@ const ContactsPage = () => {
 
   usePageAnnounce("Contacts", "رابطے");
 
-  // Register page-specific voice handler
   useEffect(() => {
     const unregister = registerPageHandler((text: string) => {
       const callMatch = text.match(/(?:call|کال)\s+(.+)/i);
@@ -43,7 +44,6 @@ const ContactsPage = () => {
         }
         return true;
       }
-      // Use as search
       setSearch(text);
       speak(t(`Searching for ${text}`, `${text} تلاش کر رہے ہیں`));
       return true;
@@ -79,10 +79,15 @@ const ContactsPage = () => {
     }
   };
 
-  const deleteContact = async (id: string) => {
+  const deleteContact = async (contact: Contact) => {
+    const confirmed = await confirm(
+      `Delete ${contact.name}? Say yes or no.`,
+      `${contact.name} حذف کریں؟ ہاں یا نہیں بولیں۔`
+    );
+    if (!confirmed) return;
     try {
-      await ContactService.deleteContact(id);
-      setContacts((c) => c.filter((x) => x.id !== id));
+      await ContactService.deleteContact(contact.id);
+      setContacts((c) => c.filter((x) => x.id !== contact.id));
       toast.success(t("Contact deleted", "رابطہ حذف"));
     } catch (err) {
       toast.error(t("Delete failed", "حذف ناکام"));
@@ -182,7 +187,7 @@ const ContactsPage = () => {
                 <button onClick={() => handleMessage(contact)} className="min-h-touch min-w-touch rounded-xl bg-primary/10 flex items-center justify-center" aria-label={`Message ${contact.name}`}>
                   <MessageSquare className="w-5 h-5 text-primary" />
                 </button>
-                <button onClick={() => deleteContact(contact.id)} className="min-h-touch min-w-touch rounded-xl hover:bg-destructive/10 flex items-center justify-center" aria-label={`Delete ${contact.name}`}>
+                <button onClick={() => deleteContact(contact)} className="min-h-touch min-w-touch rounded-xl hover:bg-destructive/10 flex items-center justify-center" aria-label={`Delete ${contact.name}`}>
                   <Trash2 className="w-4 h-4 text-destructive" />
                 </button>
               </div>
