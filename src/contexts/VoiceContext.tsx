@@ -24,10 +24,21 @@ interface VoiceContextType {
 
 const VoiceContext = createContext<VoiceContextType | null>(null);
 
+const defaultVoiceContext: VoiceContextType = {
+  isListening: false,
+  transcript: "",
+  interimText: "",
+  confidence: 0,
+  registerPageHandler: () => () => {},
+  restartListening: () => {},
+  pauseGlobal: () => {},
+  resumeGlobal: () => {},
+  isPaused: false,
+};
+
 export const useVoiceContext = () => {
   const ctx = useContext(VoiceContext);
-  if (!ctx) throw new Error("useVoiceContext must be inside VoiceProvider");
-  return ctx;
+  return ctx ?? defaultVoiceContext;
 };
 
 const MIN_CONFIDENCE = 0.4; // Accept results above this threshold
