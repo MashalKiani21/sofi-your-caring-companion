@@ -7,6 +7,7 @@ import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { VoiceProvider } from "@/contexts/VoiceContext";
+import VoiceErrorBoundary from "@/components/VoiceErrorBoundary";
 import BottomNav from "@/components/BottomNav";
 import GlobalVoiceIndicator from "@/components/GlobalVoiceIndicator";
 import IntroPage from "./pages/IntroPage";
@@ -36,27 +37,29 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
-              <VoiceProvider>
-                <GlobalVoiceIndicator />
-                <Routes>
-                  <Route path="/" element={<IntroPage />} />
-                  <Route path="/auth" element={<AuthPage />} />
-                  <Route path="/profile-setup" element={<ProfileSetup />} />
-                  <Route path="/home" element={<HomePage />} />
-                  <Route path="/companion" element={<CompanionPage />} />
-                  <Route path="/health-dashboard" element={<HealthDashboard />} />
-                  <Route path="/reminders" element={<RemindersPage />} />
-                  <Route path="/notes" element={<NotesPage />} />
-                  <Route path="/contacts" element={<ContactsPage />} />
-                  <Route path="/messages" element={<MessagesPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/reset-password" element={<ResetPassword />} />
-                  <Route path="/emergency" element={<EmergencyPage />} />
-                  <Route path="/navigation" element={<NavigationPage />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-                <BottomNav />
-              </VoiceProvider>
+              <VoiceErrorBoundary>
+                <VoiceProvider>
+                  <GlobalVoiceIndicator />
+                  <Routes>
+                    <Route path="/" element={<IntroPage />} />
+                    <Route path="/auth" element={<AuthPage />} />
+                    <Route path="/profile-setup" element={<ProfileSetup />} />
+                    <Route path="/home" element={<HomePage />} />
+                    <Route path="/companion" element={<CompanionPage />} />
+                    <Route path="/health-dashboard" element={<HealthDashboard />} />
+                    <Route path="/reminders" element={<RemindersPage />} />
+                    <Route path="/notes" element={<NotesPage />} />
+                    <Route path="/contacts" element={<ContactsPage />} />
+                    <Route path="/messages" element={<MessagesPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/emergency" element={<EmergencyPage />} />
+                    <Route path="/navigation" element={<NavigationPage />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                  <BottomNav />
+                </VoiceProvider>
+              </VoiceErrorBoundary>
             </BrowserRouter>
           </AuthProvider>
         </AccessibilityProvider>
