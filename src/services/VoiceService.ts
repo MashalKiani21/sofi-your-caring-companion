@@ -1,81 +1,122 @@
 /**
  * VoiceService - Voice command parsing, intent detection, and TTS.
- * Handles bilingual (English/Urdu) voice commands and routes them to appropriate actions.
+ * Uses fuzzy matching and multiple keyword variants for robust recognition.
  */
 
 export type VoiceIntent =
   | { type: "call"; contactName: string }
   | { type: "message"; contactName: string; content?: string }
-  | { type: "whatsapp"; contactName: string; content?: string }
   | { type: "reminder"; title: string; time?: string }
   | { type: "navigate"; page: string }
   | { type: "emergency" }
   | { type: "unknown"; text: string };
 
+/** Simple word-level similarity (Dice coefficient) */
+function similarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  const bigrams = (s: string) => {
+    const set: string[] = [];
+    for (let i = 0; i < s.length - 1; i++) set.push(s.substring(i, i + 2));
+    return set;
+  };
+  const aBi = bigrams(a);
+  const bBi = bigrams(b);
+  let matches = 0;
+  const bCopy = [...bBi];
+  for (const bi of aBi) {
+    const idx = bCopy.indexOf(bi);
+    if (idx !== -1) { matches++; bCopy.splice(idx, 1); }
+  }
+  return (2 * matches) / (aBi.length + bBi.length);
+}
+
+/** Check if any word in text fuzzy-matches any keyword */
+function fuzzyIncludes(text: string, keywords: string[], threshold = 0.6): boolean {
+  const words = text.split(/\s+/);
+  return keywords.some(kw => words.some(w => similarity(w, kw) >= threshold));
+}
+
+/** Extract text after a fuzzy-matched keyword */
+function extractAfterKeyword(text: string, keywords: string[], threshold = 0.6): string | null {
+  const words = text.split(/\s+/);
+  for (let i = 0; i < words.length; i++) {
+    if (keywords.some(kw => similarity(words[i], kw) >= threshold)) {
+      const rest = words.slice(i + 1).join(" ").trim();
+      // Remove filler words like "to", "the", "a"
+      return rest.replace(/^(to|the|a|an|کو|کا|کی)\s+/i, "").trim() || null;
+    }
+  }
+  return null;
+}
+
+// Keyword groups for robust matching
+const EMERGENCY_KEYWORDS = ["emergency", "emergancy", "emrgency", "help", "sos", "danger", "ایمرجنسی", "مدد", "بچاؤ"];
+const CALL_KEYWORDS = ["call", "phone", "dial", "ring", "کال", "فون"];
+const MESSAGE_KEYWORDS = ["send", "message", "text", "msg", "sms", "پیغام", "بھیجو", "میسج"];
+const REMINDER_KEYWORDS = ["remind", "reminder", "alarm", "timer", "یاد", "یاددہانی", "الارم"];
+const NAV_KEYWORDS: [string[], string][] = [
+  [["companion", "chat", "talk", "ai", "بات", "ساتھی", "چیٹ"], "/companion"],
+  [["reminder", "reminders", "alarm", "یاد", "یاددہانی"], "/reminders"],
+  [["note", "notes", "نوٹ", "نوٹس"], "/notes"],
+  [["health", "medical", "vitals", "صحت", "طبی"], "/health-dashboard"],
+  [["contact", "contacts", "people", "رابطے", "لوگ"], "/contacts"],
+  [["message", "messages", "inbox", "پیغام", "پیغامات"], "/messages"],
+  [["navigate", "navigation", "map", "maps", "direction", "نقشہ", "سمت"], "/navigation"],
+  [["setting", "settings", "preferences", "ترتیب", "سیٹنگ"], "/settings"],
+  [["home", "dashboard", "main", "ہوم", "مین"], "/home"],
+  [["emergency", "sos", "ایمرجنسی"], "/emergency"],
+];
+const OPEN_KEYWORDS = ["open", "go", "show", "take", "کھولو", "جاؤ", "دکھاؤ", "لے"];
+
 export const VoiceService = {
   /** Parse voice transcript into a structured intent */
   parseIntent(text: string): VoiceIntent {
     const lower = text.toLowerCase().trim();
+    const words = lower.split(/\s+/);
 
-    // Emergency
-    if (
-      lower.includes("emergency") || lower.includes("help") || lower.includes("sos") ||
-      lower.includes("ایمرجنسی") || lower.includes("مدد")
-    ) {
+    // Emergency - check first (highest priority)
+    if (fuzzyIncludes(lower, EMERGENCY_KEYWORDS, 0.7)) {
       return { type: "emergency" };
     }
 
-    // Call
-    const callMatch = lower.match(/(?:call|phone|dial|کال|فون)\s+(.+)/);
-    if (callMatch) {
-      return { type: "call", contactName: callMatch[1].trim() };
+    // Call someone
+    const callTarget = extractAfterKeyword(lower, CALL_KEYWORDS, 0.7);
+    if (callTarget) {
+      return { type: "call", contactName: callTarget };
     }
 
-    // WhatsApp
-    const waMatch = lower.match(/(?:whatsapp|واٹس ایپ)\s+(?:message|msg|call|بھیجو|کال)?\s*(?:to|کو)?\s*(.+)/);
-    if (waMatch) {
-      return { type: "whatsapp", contactName: waMatch[1].trim() };
-    }
-
-    // Send message
-    const msgMatch = lower.match(/(?:send|message|text|پیغام|بھیجو)\s+(?:to|کو)\s+(.+)/);
-    if (msgMatch) {
-      return { type: "message", contactName: msgMatch[1].trim() };
+    // Send message - check for "message [name] [content]" pattern
+    const msgTarget = extractAfterKeyword(lower, MESSAGE_KEYWORDS, 0.65);
+    if (msgTarget) {
+      // Split into contact name and optional content
+      const parts = msgTarget.split(/\s+(?:that|saying|say|کہ|بولو)\s+/i);
+      return { type: "message", contactName: parts[0].trim(), content: parts[1]?.trim() };
     }
 
     // Reminder
-    const reminderMatch = lower.match(/(?:remind|reminder|set reminder|یاد دہانی|یاد)\s+(?:me\s+)?(?:to\s+)?(.+?)(?:\s+at\s+(.+))?$/);
-    if (reminderMatch) {
-      return { type: "reminder", title: reminderMatch[1].trim(), time: reminderMatch[2]?.trim() };
+    const reminderTarget = extractAfterKeyword(lower, REMINDER_KEYWORDS, 0.65);
+    if (reminderTarget) {
+      const timeParts = reminderTarget.split(/\s+(?:at|on|in|پر|بجے)\s+/i);
+      return { type: "reminder", title: timeParts[0].trim(), time: timeParts[1]?.trim() };
     }
 
-    // Navigation
-    const navMap: Record<string, string> = {
-      "companion": "/companion", "chat": "/companion", "بات": "/companion", "ساتھی": "/companion",
-      "reminder": "/reminders", "یاد": "/reminders",
-      "note": "/notes", "نوٹ": "/notes",
-      "health": "/health-dashboard", "صحت": "/health-dashboard",
-      "contact": "/contacts", "رابطے": "/contacts",
-      "message": "/messages", "پیغام": "/messages",
-      "whatsapp": "/whatsapp", "واٹس": "/whatsapp",
-      "navigation": "/navigation", "نقشہ": "/navigation", "map": "/navigation",
-      "setting": "/settings", "ترتیب": "/settings",
-      "home": "/home", "ہوم": "/home",
-      "caregiver": "/caregiver", "نگہداشت": "/caregiver",
-    };
+    // Navigation - "open [page]" or just page name
+    const hasOpenWord = fuzzyIncludes(lower, OPEN_KEYWORDS, 0.7);
+    const searchText = hasOpenWord
+      ? extractAfterKeyword(lower, OPEN_KEYWORDS, 0.7) || lower
+      : lower;
 
-    for (const [keyword, page] of Object.entries(navMap)) {
-      if (lower.includes(keyword)) {
+    for (const [keywords, page] of NAV_KEYWORDS) {
+      if (fuzzyIncludes(searchText, keywords, 0.65)) {
         return { type: "navigate", page };
       }
     }
 
-    // Open specific pages
-    const openMatch = lower.match(/(?:open|go to|کھولو|جاؤ)\s+(.+)/);
-    if (openMatch) {
-      const target = openMatch[1].trim();
-      for (const [keyword, page] of Object.entries(navMap)) {
-        if (target.includes(keyword)) {
+    // If just a page keyword alone without "open"
+    if (!hasOpenWord) {
+      for (const [keywords, page] of NAV_KEYWORDS) {
+        if (fuzzyIncludes(lower, keywords, 0.7)) {
           return { type: "navigate", page };
         }
       }
@@ -107,7 +148,6 @@ export const VoiceService = {
       switch (intent.type) {
         case "call": return `${intent.contactName} کو کال کر رہے ہیں...`;
         case "message": return `${intent.contactName} کو پیغام بھیج رہے ہیں...`;
-        case "whatsapp": return `${intent.contactName} کو واٹس ایپ پر بھیج رہے ہیں...`;
         case "reminder": return `یاد دہانی بنا رہے ہیں: ${intent.title}`;
         case "navigate": return `صفحہ کھول رہے ہیں...`;
         case "emergency": return `ایمرجنسی فعال کر رہے ہیں!`;
@@ -117,7 +157,6 @@ export const VoiceService = {
     switch (intent.type) {
       case "call": return `Calling ${intent.contactName}...`;
       case "message": return `Sending message to ${intent.contactName}...`;
-      case "whatsapp": return `Opening WhatsApp for ${intent.contactName}...`;
       case "reminder": return `Creating reminder: ${intent.title}`;
       case "navigate": return `Opening page...`;
       case "emergency": return `Activating emergency!`;

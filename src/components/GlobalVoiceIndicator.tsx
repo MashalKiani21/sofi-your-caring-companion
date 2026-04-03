@@ -1,6 +1,6 @@
 /**
- * GlobalVoiceIndicator - Shows a persistent mic indicator when voice is active.
- * Appears as a small floating badge so the user knows SOFI is always listening.
+ * GlobalVoiceIndicator - Shows live transcript + mic state.
+ * Displays interim text so users can SEE what the mic is hearing in real-time.
  */
 import { useVoiceContext } from "@/contexts/VoiceContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -9,17 +9,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "react-router-dom";
 
 const GlobalVoiceIndicator = () => {
-  const { isListening, transcript, isPaused, pauseGlobal, resumeGlobal } = useVoiceContext();
+  const { isListening, transcript, interimText, confidence, isPaused, pauseGlobal, resumeGlobal } = useVoiceContext();
   const { t } = useAccessibility();
   const location = useLocation();
 
-  // Don't show on intro/auth pages
   const hiddenRoutes = ["/", "/auth", "/reset-password", "/profile-setup"];
   if (hiddenRoutes.includes(location.pathname)) return null;
 
+  const displayText = interimText || transcript;
+
   return (
     <>
-      {/* Floating mic indicator - top right */}
+      {/* Floating mic indicator */}
       <motion.button
         onClick={() => isPaused ? resumeGlobal() : pauseGlobal()}
         className={`fixed top-3 right-3 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full shadow-lg transition-colors ${
@@ -31,7 +32,7 @@ const GlobalVoiceIndicator = () => {
         }`}
         animate={isListening ? { scale: [1, 1.05, 1] } : {}}
         transition={isListening ? { repeat: Infinity, duration: 1.5 } : {}}
-        aria-label={isListening ? t("SOFI is listening. Tap to pause.", "سوفی سن رہی ہے۔ روکنے کے لیے دبائیں۔") : t("Voice paused. Tap to resume.", "آواز رکی ہے۔ شروع کرنے کے لیے دبائیں۔")}
+        aria-label={isListening ? t("SOFI is listening", "سوفی سن رہی ہے") : t("Voice paused", "آواز رکی ہے")}
         aria-live="polite"
       >
         {isListening ? (
@@ -53,18 +54,31 @@ const GlobalVoiceIndicator = () => {
         )}
       </motion.button>
 
-      {/* Transcript flash */}
+      {/* Live transcript display - shows interim + final text */}
       <AnimatePresence>
-        {transcript && isListening && (
+        {displayText && isListening && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-12 left-4 right-4 z-50 p-2.5 rounded-2xl bg-card border border-primary/20 shadow-lg text-center"
+            className="fixed top-12 left-4 right-4 z-50 p-3 rounded-2xl bg-card border border-primary/20 shadow-lg"
             role="status"
             aria-live="assertive"
           >
-            <p className="text-xs font-medium text-primary">"{transcript}"</p>
+            <p className={`text-xs font-medium text-center ${interimText ? "text-muted-foreground italic" : "text-primary"}`}>
+              {interimText ? (
+                <>🎙️ {interimText}...</>
+              ) : (
+                <>✅ "{transcript}"</>
+              )}
+            </p>
+            {confidence > 0 && !interimText && (
+              <div className="mt-1 flex justify-center">
+                <span className="text-[9px] text-muted-foreground">
+                  {t(`Confidence: ${Math.round(confidence * 100)}%`, `اعتماد: ${Math.round(confidence * 100)}%`)}
+                </span>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
