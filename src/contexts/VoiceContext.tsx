@@ -1,7 +1,6 @@
 /**
  * VoiceContext - Global always-on voice controller.
- * Continuously listens for voice commands across all pages.
- * Pages can register page-specific handlers via useVoiceContext.
+ * Uses interim results for live feedback and confidence filtering.
  */
 import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -14,13 +13,11 @@ import { toast } from "sonner";
 interface VoiceContextType {
   isListening: boolean;
   transcript: string;
-  /** Register a page-specific voice handler. Returns unregister fn. */
+  interimText: string;
+  confidence: number;
   registerPageHandler: (handler: (text: string) => boolean) => () => void;
-  /** Manually trigger listening restart (e.g. after an action) */
   restartListening: () => void;
-  /** Pause global listening (e.g. when page needs exclusive mic) */
   pauseGlobal: () => void;
-  /** Resume global listening */
   resumeGlobal: () => void;
   isPaused: boolean;
 }
@@ -33,13 +30,19 @@ export const useVoiceContext = () => {
   return ctx;
 };
 
+const MIN_CONFIDENCE = 0.4; // Accept results above this threshold
+const SILENCE_RESTART_MS = 500;
+
 export const VoiceProvider = ({ children }: { children: ReactNode }) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [interimText, setInterimText] = useState("");
+  const [confidence, setConfidence] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const recognitionRef = useRef<any>(null);
   const pageHandlersRef = useRef<Set<(text: string) => boolean>>(new Set());
   const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const processingRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { language, t, speak, disabilityType } = useAccessibility();
@@ -48,14 +51,12 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
   const isSupported = typeof window !== "undefined" &&
     ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
 
-  // Don't auto-listen on intro/auth pages
   const silentPages = ["/", "/auth", "/reset-password"];
   const shouldListen = isSupported && !isPaused && !silentPages.includes(location.pathname);
 
   const startRecognition = useCallback(() => {
     if (!isSupported || isPaused || silentPages.includes(location.pathname)) return;
 
-    // Clean up existing
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch {}
     }
@@ -66,46 +67,87 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
 
     recognition.lang = language === "ur" ? "ur-PK" : "en-US";
     recognition.continuous = true;
-    recognition.interimResults = false; // Only final results to avoid noise
+    recognition.interimResults = true; // Show what's being heard in real-time
+    recognition.maxAlternatives = 3; // Get multiple interpretations
 
-    recognition.onstart = () => setIsListening(true);
+    recognition.onstart = () => {
+      setIsListening(true);
+      setInterimText("");
+    };
 
     recognition.onresult = (event: any) => {
+      let interim = "";
       let finalText = "";
+      let bestConfidence = 0;
+
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalText += event.results[i][0].transcript;
+        const result = event.results[i];
+        const conf = result[0].confidence || 0;
+
+        if (result.isFinal) {
+          // Pick the best alternative above confidence threshold
+          let bestTranscript = result[0].transcript;
+          let bestConf = conf;
+
+          for (let j = 1; j < result.length; j++) {
+            if (result[j].confidence > bestConf) {
+              bestTranscript = result[j].transcript;
+              bestConf = result[j].confidence;
+            }
+          }
+
+          if (bestConf >= MIN_CONFIDENCE || bestConf === 0) {
+            // confidence=0 means browser doesn't report it - still accept
+            finalText += bestTranscript;
+            bestConfidence = Math.max(bestConfidence, bestConf);
+          } else {
+            console.log(`[Voice] Rejected low-confidence (${bestConf.toFixed(2)}): "${bestTranscript}"`);
+          }
+        } else {
+          interim += result[0].transcript;
         }
       }
+
+      // Show interim text so user sees what's being heard
+      if (interim) {
+        setInterimText(interim);
+      }
+
       if (finalText.trim()) {
+        setInterimText("");
+        setConfidence(bestConfidence);
         handleVoiceInput(finalText.trim());
       }
     };
 
     recognition.onerror = (event: any) => {
-      // "no-speech" and "aborted" are normal - just restart
       if (event.error === "no-speech" || event.error === "aborted") {
-        // Restart after brief pause
         scheduleRestart(1000);
         return;
       }
-      console.warn("Voice recognition error:", event.error);
+      if (event.error === "not-allowed") {
+        console.warn("[Voice] Microphone permission denied");
+        toast.error(t("Microphone access denied. Please allow mic in browser settings.", 
+          "مائکروفون کی اجازت نہیں۔ براؤزر سیٹنگز میں مائک کی اجازت دیں۔"));
+        setIsListening(false);
+        return;
+      }
+      console.warn("[Voice] Recognition error:", event.error);
       setIsListening(false);
       scheduleRestart(2000);
     };
 
     recognition.onend = () => {
       setIsListening(false);
-      // Auto-restart for continuous listening
+      setInterimText("");
       if (!isPaused && !silentPages.includes(location.pathname)) {
-        scheduleRestart(500);
+        scheduleRestart(SILENCE_RESTART_MS);
       }
     };
 
     try {
       recognition.start();
     } catch (e) {
-      // Already started
       scheduleRestart(1000);
     }
   }, [language, isPaused, location.pathname, isSupported]);
@@ -118,75 +160,79 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
   }, [startRecognition]);
 
   const handleVoiceInput = useCallback(async (text: string) => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+
     setTranscript(text);
+    console.log(`[Voice] Heard: "${text}"`);
 
-    // First, let page-specific handlers try to handle it
-    for (const handler of pageHandlersRef.current) {
-      if (handler(text)) return; // Page handled it
-    }
+    try {
+      // Let page-specific handlers try first
+      for (const handler of pageHandlersRef.current) {
+        if (handler(text)) return;
+      }
 
-    // Global intent parsing
-    const intent = VoiceService.parseIntent(text);
-    const confirmation = VoiceService.getConfirmation(intent, language);
+      const intent = VoiceService.parseIntent(text);
+      const confirmation = VoiceService.getConfirmation(intent, language);
+      console.log(`[Voice] Intent: ${intent.type}`, intent);
 
-    switch (intent.type) {
-      case "navigate":
-        speak(confirmation);
-        toast.info(confirmation);
-        navigate(intent.page);
-        break;
+      switch (intent.type) {
+        case "navigate":
+          speak(confirmation);
+          toast.info(confirmation);
+          navigate(intent.page);
+          break;
 
-      case "emergency":
-        speak(confirmation);
-        navigate("/emergency");
-        break;
+        case "emergency":
+          speak(confirmation);
+          navigate("/emergency");
+          break;
 
-      case "call":
-        if (user) {
-          try {
-            const contacts = await ContactService.getContacts(user.id);
-            const matches = ContactService.findByName(contacts, intent.contactName);
-            if (matches.length === 1) {
-              speak(t(`Calling ${matches[0].name}`, `${matches[0].name} کو کال کر رہے ہیں`));
-              ContactService.makeCall(matches[0].phone);
-            } else if (matches.length > 1) {
-              const details = matches.map((c, i) => `${i + 1}. ${c.name} (${c.relationship})`).join(", ");
-              speak(t(`Multiple contacts: ${details}. Say the number.`, `کئی رابطے: ${details}۔ نمبر بتائیں۔`));
-            } else {
-              speak(t(`No contact named ${intent.contactName}`, `${intent.contactName} نام کا رابطہ نہیں ملا`));
+        case "call":
+          if (user) {
+            try {
+              const contacts = await ContactService.getContacts(user.id);
+              const matches = ContactService.findByName(contacts, intent.contactName);
+              if (matches.length === 1) {
+                speak(t(`Calling ${matches[0].name}`, `${matches[0].name} کو کال کر رہے ہیں`));
+                ContactService.makeCall(matches[0].phone);
+              } else if (matches.length > 1) {
+                const details = matches.map((c, i) => `${i + 1}. ${c.name}`).join(", ");
+                speak(t(`Multiple contacts: ${details}. Say the number.`, `کئی رابطے: ${details}۔ نمبر بتائیں۔`));
+              } else {
+                speak(t(`No contact named ${intent.contactName}`, `${intent.contactName} نام کا رابطہ نہیں ملا`));
+                toast.warning(t(`Contact "${intent.contactName}" not found`, `رابطہ "${intent.contactName}" نہیں ملا`));
+              }
+            } catch {
+              navigate("/contacts");
             }
-          } catch {
-            navigate("/contacts");
+          } else {
+            speak(t("Please sign in first", "پہلے سائن ان کریں"));
           }
-        } else {
-          speak(t("Please sign in first", "پہلے سائن ان کریں"));
-        }
-        break;
+          break;
 
-      case "message":
-        speak(confirmation);
-        navigate("/messages");
-        break;
+        case "message":
+          speak(confirmation);
+          navigate("/messages");
+          break;
 
-      case "whatsapp":
-        speak(confirmation);
-        navigate("/messages");
-        break;
+        case "reminder":
+          speak(confirmation);
+          navigate("/reminders");
+          break;
 
-      case "reminder":
-        speak(confirmation);
-        navigate("/reminders");
-        break;
-
-      case "unknown":
-        // Send to AI companion for unknown commands
-        speak(t("Let me help you with that", "میں آپ کی مدد کرتی ہوں"));
-        navigate("/companion");
-        break;
+        case "unknown":
+          // Show what was heard so user can see
+          toast.info(t(`I heard: "${text}"`, `میں نے سنا: "${text}"`));
+          speak(t("Let me help you with that", "میں آپ کی مدد کرتی ہوں"));
+          navigate("/companion");
+          break;
+      }
+    } finally {
+      processingRef.current = false;
     }
   }, [language, user, navigate, speak, t]);
 
-  // Start/stop recognition based on page and pause state
   useEffect(() => {
     if (shouldListen) {
       startRecognition();
@@ -196,13 +242,11 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
       }
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
     }
-
     return () => {
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
     };
   }, [shouldListen, startRecognition]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
@@ -238,8 +282,8 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <VoiceContext.Provider value={{
-      isListening, transcript, registerPageHandler,
-      restartListening, pauseGlobal, resumeGlobal, isPaused,
+      isListening, transcript, interimText, confidence,
+      registerPageHandler, restartListening, pauseGlobal, resumeGlobal, isPaused,
     }}>
       {children}
     </VoiceContext.Provider>
