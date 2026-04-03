@@ -7,6 +7,7 @@ import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { VoiceProvider } from "@/contexts/VoiceContext";
+import VoiceErrorBoundary from "@/components/VoiceErrorBoundary";
 import BottomNav from "@/components/BottomNav";
 import GlobalVoiceIndicator from "@/components/GlobalVoiceIndicator";
 import IntroPage from "./pages/IntroPage";
