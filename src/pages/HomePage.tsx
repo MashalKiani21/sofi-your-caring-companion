@@ -9,6 +9,7 @@ import {
   Bot, Bell, Phone, MapPin, HeartPulse, ShieldAlert, Settings, LogOut,
   FileText, MessageSquare, Keyboard
 } from "lucide-react";
+import VoiceCommandTutorial from "@/components/VoiceCommandTutorial";
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -77,6 +78,7 @@ const HomePage = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-background pb-24" role="main" aria-label="SOFI Home Dashboard">
+      <VoiceCommandTutorial />
       <header className="px-5 pt-6 pb-2" role="banner">
         <div className="flex items-center justify-between">
           <div>
