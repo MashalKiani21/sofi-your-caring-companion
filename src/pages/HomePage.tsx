@@ -9,6 +9,7 @@ import {
   Bot, Bell, Phone, MapPin, HeartPulse, ShieldAlert, Settings, LogOut,
   FileText, MessageSquare, Keyboard
 } from "lucide-react";
+import VoiceCommandTutorial from "@/components/VoiceCommandTutorial";
 
 const HomePage = () => {
   const navigate = useNavigate();
