@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import { useVoiceContext } from "@/contexts/VoiceContext";
 import { supabase } from "@/integrations/supabase/client";
+import { VoiceService } from "@/services/VoiceService";
 import { ArrowLeft, MapPin, Search, Navigation, Clock, Volume2, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -57,11 +58,24 @@ const NavigationPage = () => {
 
   useEffect(() => {
     const unregister = registerPageHandler((text: string) => {
-      const dest = text.replace(/(?:navigate|go|directions|take me)\s+(?:to|for)?\s*/i, "").trim();
-      if (dest) {
-        setDestination(dest);
-        speak(t(`Searching for ${dest}`, `${dest} تلاش کر رہے ہیں`));
+      const normalizedText = text.trim();
+      if (!normalizedText) return false;
+
+      const intent = VoiceService.parseIntent(normalizedText);
+      const isGlobalCommand =
+        intent.type === "call" ||
+        intent.type === "message" ||
+        intent.type === "reminder" ||
+        intent.type === "emergency" ||
+        (intent.type === "navigate" && intent.page !== "/navigation");
+
+      if (isGlobalCommand) {
+        return false;
       }
+
+      const dest = normalizedText.replace(/(?:navigate|go|directions|take me)\s+(?:to|for)?\s*/i, "").trim() || normalizedText;
+      setDestination(dest);
+      speak(t(`Searching for ${dest}`, `${dest} تلاش کر رہے ہیں`));
       return true;
     });
     return unregister;

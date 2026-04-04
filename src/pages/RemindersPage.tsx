@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useVoiceContext } from "@/contexts/VoiceContext";
 import { useVoiceConfirmation } from "@/hooks/useVoiceConfirmation";
 import { ReminderService, type ReminderData } from "@/services/ReminderService";
+import { VoiceService } from "@/services/VoiceService";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import { ArrowLeft, Plus, Clock, Trash2, Bell, Check, X, AlarmClock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,20 +28,26 @@ const RemindersPage = () => {
 
   useEffect(() => {
     const unregister = registerPageHandler((text: string) => {
-      const lower = text.toLowerCase();
-      if (lower.includes("remind") || lower.includes("یاد") || lower.includes("alarm") || lower.includes("الارم")) {
-        const parsed = ReminderService.parseVoiceReminder(text);
-        if (parsed) {
-          setNewTitle(parsed.title);
-          if (parsed.time) setNewTime(parsed.time);
-          setShowAdd(true);
-          speak(t(`Setting reminder: ${parsed.title}`, `یاد دہانی لگا رہے ہیں: ${parsed.title}`));
-        } else {
-          setNewTitle(text);
-          setShowAdd(true);
-        }
+      const intent = VoiceService.parseIntent(text);
+
+      if (intent.type === "navigate" || intent.type === "call" || intent.type === "message" || intent.type === "emergency") {
+        return false;
+      }
+
+      const parsed = intent.type === "reminder"
+        ? { title: intent.title, time: intent.time || "" }
+        : ReminderService.parseVoiceReminder(text);
+
+      if (parsed) {
+        setNewTitle(parsed.title);
+        if (parsed.time) setNewTime(parsed.time);
+        setShowAdd(true);
+        speak(t(`Setting reminder: ${parsed.title}`, `یاد دہانی لگا رہے ہیں: ${parsed.title}`));
         return true;
       }
+
+      if (!text.trim()) return false;
+
       setNewTitle(text);
       setShowAdd(true);
       speak(t(`Creating reminder: ${text}`, `یاد دہانی بنا رہے ہیں: ${text}`));

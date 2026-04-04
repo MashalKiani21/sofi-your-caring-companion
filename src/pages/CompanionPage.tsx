@@ -4,6 +4,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVoiceContext } from "@/contexts/VoiceContext";
 import { supabase } from "@/integrations/supabase/client";
+import { VoiceService } from "@/services/VoiceService";
 import { Send, ArrowLeft, Globe, Menu, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
@@ -24,11 +25,15 @@ const CompanionPage = () => {
   // Register page-specific voice handler: all voice input goes to chat
   useEffect(() => {
     const unregister = registerPageHandler((text: string) => {
+      if (VoiceService.parseIntent(text).type !== "unknown") {
+        return false;
+      }
+
       handleSend(text);
       return true; // We handled it, don't let global handle it
     });
     return unregister;
-  }, [registerPageHandler, messages, isLoading]);
+  }, [registerPageHandler, handleSend]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

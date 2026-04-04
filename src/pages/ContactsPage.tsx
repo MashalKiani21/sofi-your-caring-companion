@@ -6,6 +6,7 @@ import { useVoiceContext } from "@/contexts/VoiceContext";
 import { useVoiceConfirmation } from "@/hooks/useVoiceConfirmation";
 import { ContactService, type Contact } from "@/services/ContactService";
 import { MessagingService } from "@/services/MessagingService";
+import { VoiceService } from "@/services/VoiceService";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import { ArrowLeft, Phone, MessageSquare, Search, Plus, User, Trash2, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,10 +30,14 @@ const ContactsPage = () => {
 
   useEffect(() => {
     const unregister = registerPageHandler((text: string) => {
-      const callMatch = text.match(/(?:call|کال)\s+(.+)/i);
-      if (callMatch) {
-        const name = callMatch[1].trim();
-        const matches = ContactService.findByName(contacts, name);
+      const intent = VoiceService.parseIntent(text);
+
+      if (intent.type === "navigate" || intent.type === "message" || intent.type === "reminder" || intent.type === "emergency") {
+        return false;
+      }
+
+      if (intent.type === "call") {
+        const matches = ContactService.findByName(contacts, intent.contactName);
         if (matches.length === 1) {
           speak(t(`Calling ${matches[0].name}`, `${matches[0].name} کو کال کر رہے ہیں`));
           ContactService.makeCall(matches[0].phone);
@@ -40,10 +45,13 @@ const ContactsPage = () => {
           const details = matches.map((c, i) => `${i + 1}. ${c.name} (${c.relationship})`).join(", ");
           speak(t(`Multiple contacts: ${details}. Which one?`, `کئی رابطے: ${details}۔ کون سا؟`));
         } else {
-          speak(t(`No contact named ${name}`, `${name} نام کا رابطہ نہیں ملا`));
+          speak(t(`No contact named ${intent.contactName}`, `${intent.contactName} نام کا رابطہ نہیں ملا`));
         }
         return true;
       }
+
+      if (!text.trim()) return false;
+
       setSearch(text);
       speak(t(`Searching for ${text}`, `${text} تلاش کر رہے ہیں`));
       return true;
@@ -101,7 +109,7 @@ const ContactsPage = () => {
 
   const handleMessage = (contact: Contact) => {
     speak(t(`Messaging ${contact.name}`, `${contact.name} کو پیغام`));
-    MessagingService.sendSMS(contact.phone, "");
+    navigate("/messages", { state: { contactId: contact.id } });
   };
 
   const filtered = ContactService.searchContacts(contacts, search);
