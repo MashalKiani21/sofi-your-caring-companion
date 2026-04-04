@@ -22,19 +22,6 @@ const CompanionPage = () => {
   const { user } = useAuth();
   const { registerPageHandler, isListening } = useVoiceContext();
 
-  // Register page-specific voice handler: all voice input goes to chat
-  useEffect(() => {
-    const unregister = registerPageHandler((text: string) => {
-      if (VoiceService.parseIntent(text).type !== "unknown") {
-        return false;
-      }
-
-      handleSend(text);
-      return true; // We handled it, don't let global handle it
-    });
-    return unregister;
-  }, [registerPageHandler, handleSend]);
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -120,6 +107,19 @@ const CompanionPage = () => {
       setIsLoading(false);
     }
   }, [input, messages, isLoading, user, t, speak, isMuted, language]);
+
+  // Register page-specific voice handler: all unknown voice input goes to chat
+  useEffect(() => {
+    const unregister = registerPageHandler((text: string) => {
+      if (VoiceService.parseIntent(text).type !== "unknown") {
+        return false;
+      }
+
+      handleSend(text);
+      return true;
+    });
+    return unregister;
+  }, [registerPageHandler, handleSend]);
 
   const toggleLanguage = () => {
     const newLang = language === "en" ? "ur" : "en";
