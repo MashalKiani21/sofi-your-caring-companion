@@ -54,6 +54,7 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
   const pageHandlersRef = useRef<Set<(text: string) => boolean>>(new Set());
   const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const processingRef = useRef(false);
+  const restartBlockedRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { language, t, speak, disabilityType } = useAccessibility();
@@ -66,7 +67,7 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
   const shouldListen = isSupported && !isPaused && !silentPages.includes(location.pathname);
 
   const startRecognition = useCallback(() => {
-    if (!isSupported || isPaused || silentPages.includes(location.pathname)) return;
+    if (!isSupported || isPaused || silentPages.includes(location.pathname) || restartBlockedRef.current) return;
 
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch {}
@@ -133,25 +134,27 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
 
     recognition.onerror = (event: any) => {
       if (event.error === "no-speech" || event.error === "aborted") {
-        scheduleRestart(1000);
+        if (!restartBlockedRef.current) scheduleRestart(1000);
         return;
       }
-      if (event.error === "not-allowed") {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        restartBlockedRef.current = true;
+        setIsPaused(true);
         console.warn("[Voice] Microphone permission denied");
-        toast.error(t("Microphone access denied. Please allow mic in browser settings.", 
-          "مائکروفون کی اجازت نہیں۔ براؤزر سیٹنگز میں مائک کی اجازت دیں۔"));
+        toast.error(t("Microphone access denied. Allow the mic in browser settings, then tap the mic button to retry.", 
+          "مائکروفون کی اجازت نہیں۔ براؤزر سیٹنگز میں مائک کی اجازت دیں، پھر دوبارہ کوشش کے لیے مائیک بٹن دبائیں۔"));
         setIsListening(false);
         return;
       }
       console.warn("[Voice] Recognition error:", event.error);
       setIsListening(false);
-      scheduleRestart(2000);
+      if (!restartBlockedRef.current) scheduleRestart(2000);
     };
 
     recognition.onend = () => {
       setIsListening(false);
       setInterimText("");
-      if (!isPaused && !silentPages.includes(location.pathname)) {
+      if (!restartBlockedRef.current && !isPaused && !silentPages.includes(location.pathname)) {
         scheduleRestart(SILENCE_RESTART_MS);
       }
     };
@@ -165,8 +168,9 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
 
   const scheduleRestart = useCallback((delay: number) => {
     if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+    if (restartBlockedRef.current) return;
     restartTimeoutRef.current = setTimeout(() => {
-      startRecognition();
+      if (!restartBlockedRef.current) startRecognition();
     }, delay);
   }, [startRecognition]);
 
@@ -245,7 +249,7 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
   }, [language, user, navigate, speak, t]);
 
   useEffect(() => {
-    if (shouldListen) {
+    if (shouldListen && !restartBlockedRef.current) {
       startRecognition();
     } else {
       if (recognitionRef.current) {
@@ -280,6 +284,7 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
   }, [scheduleRestart]);
 
   const pauseGlobal = useCallback(() => {
+    restartBlockedRef.current = true;
     setIsPaused(true);
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch {}
@@ -288,6 +293,7 @@ export const VoiceProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const resumeGlobal = useCallback(() => {
+    restartBlockedRef.current = false;
     setIsPaused(false);
   }, []);
 

@@ -6,6 +6,7 @@ import { useVoiceContext } from "@/contexts/VoiceContext";
 import { useVoiceConfirmation } from "@/hooks/useVoiceConfirmation";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import { supabase } from "@/integrations/supabase/client";
+import { VoiceService } from "@/services/VoiceService";
 import { ArrowLeft, Plus, Trash2, Edit, Save, X, FileText, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -37,6 +38,12 @@ const NotesPage = () => {
 
   useEffect(() => {
     const unregister = registerPageHandler((text: string) => {
+      if (VoiceService.parseIntent(text).type !== "unknown") {
+        return false;
+      }
+
+      if (!text.trim()) return false;
+
       setNewTitle(text.slice(0, 50));
       setNewContent(text);
       setShowAdd(true);

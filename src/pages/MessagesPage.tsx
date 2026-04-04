@@ -1,17 +1,19 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVoiceContext } from "@/contexts/VoiceContext";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import { ContactService, type Contact } from "@/services/ContactService";
 import { MessagingService } from "@/services/MessagingService";
+import { VoiceService } from "@/services/VoiceService";
 import { ArrowLeft, Send, Search, Phone, User, MessageSquare } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
 const MessagesPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t, speak, language, disabilityType } = useAccessibility();
   const { user } = useAuth();
   const { registerPageHandler, isListening } = useVoiceContext();
@@ -20,6 +22,7 @@ const MessagesPage = () => {
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(true);
+  const preselectedContactId = (location.state as { contactId?: string } | null)?.contactId;
 
   usePageAnnounce("Messages", "پیغامات");
 
@@ -32,24 +35,38 @@ const MessagesPage = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (!preselectedContactId || !contacts.length || activeContact) return;
+
+    const selectedContact = contacts.find((contact) => contact.id === preselectedContactId);
+    if (!selectedContact) return;
+
+    setActiveContact(selectedContact);
+    speak(t(`Chat with ${selectedContact.name}`, `${selectedContact.name} کے ساتھ چیٹ`));
+    navigate(location.pathname, { replace: true, state: null });
+  }, [preselectedContactId, contacts, activeContact, navigate, location.pathname, speak, t]);
+
   // Voice handler: "message Ahmed hello" or just search
   useEffect(() => {
     const unregister = registerPageHandler((text: string) => {
-      const msgMatch = text.match(/(?:message|text|send|پیغام|بھیجو)\s+(?:to\s+)?(\w+)\s*(.*)/i);
-      if (msgMatch) {
-        const name = msgMatch[1].trim();
-        const content = msgMatch[2]?.trim() || "";
-        const matches = ContactService.findByName(contacts, name);
+      const intent = VoiceService.parseIntent(text);
+
+      if (intent.type === "navigate" || intent.type === "call" || intent.type === "reminder" || intent.type === "emergency") {
+        return false;
+      }
+
+      if (intent.type === "message") {
+        const matches = ContactService.findByName(contacts, intent.contactName);
         if (matches.length === 1) {
           setActiveContact(matches[0]);
-          if (content) {
-            setMessageText(MessagingService.composeFromVoice(content));
+          if (intent.content) {
+            setMessageText(MessagingService.composeFromVoice(intent.content));
             speak(t(`Message ready for ${matches[0].name}`, `${matches[0].name} کے لیے پیغام تیار`));
           } else {
             speak(t(`Opened chat with ${matches[0].name}. Speak your message.`, `${matches[0].name} کے ساتھ چیٹ کھلی۔ پیغام بولیں۔`));
           }
         } else {
-          speak(t(`Contact not found: ${name}`, `رابطہ نہیں ملا: ${name}`));
+          speak(t(`Contact not found: ${intent.contactName}`, `رابطہ نہیں ملا: ${intent.contactName}`));
         }
         return true;
       }
@@ -59,6 +76,9 @@ const MessagesPage = () => {
         speak(t("Added to message.", "پیغام میں شامل۔"));
         return true;
       }
+
+      if (!text.trim()) return false;
+
       setSearch(text);
       speak(t(`Searching for ${text}`, `${text} تلاش کر رہے ہیں`));
       return true;

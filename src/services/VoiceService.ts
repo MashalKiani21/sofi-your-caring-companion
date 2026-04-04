@@ -51,7 +51,8 @@ function extractAfterKeyword(text: string, keywords: string[], threshold = 0.6):
 }
 
 // Keyword groups for robust matching
-const EMERGENCY_KEYWORDS = ["emergency", "emergancy", "emrgency", "help", "sos", "danger", "ایمرجنسی", "مدد", "بچاؤ"];
+const EMERGENCY_KEYWORDS = ["emergency", "emergancy", "emrgency", "sos", "danger", "ایمرجنسی", "بچاؤ"];
+const SOFT_EMERGENCY_KEYWORDS = ["help", "مدد"];
 const CALL_KEYWORDS = ["call", "phone", "dial", "ring", "کال", "فون"];
 const MESSAGE_KEYWORDS = ["send", "message", "text", "msg", "sms", "پیغام", "بھیجو", "میسج"];
 const REMINDER_KEYWORDS = ["remind", "reminder", "alarm", "timer", "یاد", "یاددہانی", "الارم"];
@@ -75,8 +76,11 @@ export const VoiceService = {
     const lower = text.toLowerCase().trim();
     const words = lower.split(/\s+/);
 
-    // Emergency - check first (highest priority)
+    // Emergency - check first, but avoid false positives from longer help phrases
     if (fuzzyIncludes(lower, EMERGENCY_KEYWORDS, 0.7)) {
+      return { type: "emergency" };
+    }
+    if (words.length <= 3 && fuzzyIncludes(lower, SOFT_EMERGENCY_KEYWORDS, 0.75)) {
       return { type: "emergency" };
     }
 
