@@ -56,6 +56,7 @@ const App = () => (
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/emergency" element={<EmergencyPage />} />
                     <Route path="/navigation" element={<NavigationPage />} />
+                    <Route path="/install" element={<InstallPage />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                   <BottomNav />
