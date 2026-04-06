@@ -109,9 +109,29 @@
     @apply border-border;
   }
 
+  html {
+    /* Prevent overscroll bounce on mobile */
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Public Sans', sans-serif;
+    /* Mobile native feel */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+    overscroll-behavior-y: contain;
+    /* Safe area for notched devices */
+    padding-top: env(safe-area-inset-top, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
+  }
+
+  /* Allow text selection in inputs/textareas */
+  input, textarea, [contenteditable] {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   .font-urdu {
@@ -123,6 +143,19 @@
 /* Safe area padding for bottom navigation on notched devices */
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Standalone PWA status bar spacing */
+@media all and (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top, 20px);
+  }
+}
+
+/* Smooth touch scrolling */
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
 }
 
 /* High contrast mode overrides */

@@ -24,6 +24,7 @@ import SettingsPage from "./pages/SettingsPage";
 import ResetPassword from "./pages/ResetPassword";
 import EmergencyPage from "./pages/EmergencyPage";
 import NavigationPage from "./pages/NavigationPage";
+import InstallPage from "./pages/InstallPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -55,6 +56,7 @@ const App = () => (
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/emergency" element={<EmergencyPage />} />
                     <Route path="/navigation" element={<NavigationPage />} />
+                    <Route path="/install" element={<InstallPage />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                   <BottomNav />
