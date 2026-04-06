@@ -5,9 +5,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import {
-  ArrowLeft, Globe, Type, Sun, Moon, Volume2, Mic, MicOff, LogOut, User, Shield, Navigation
+  ArrowLeft, Globe, Type, Sun, Moon, Volume2, Mic, MicOff, LogOut, User, Shield, Navigation, BookOpen
 } from "lucide-react";
 import { toast } from "sonner";
+import VoiceDiagnosticsPanel from "@/components/VoiceDiagnosticsPanel";
+import VoiceCommandTutorial, { resetTutorial } from "@/components/VoiceCommandTutorial";
 
 const SettingsPage = () => {
   const navigate = useNavigate();
