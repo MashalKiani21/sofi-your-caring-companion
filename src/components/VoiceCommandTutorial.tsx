@@ -1,10 +1,10 @@
 /**
- * VoiceCommandTutorial - Plays on first login to teach all voice commands.
- * Shows bilingual cards with auto-narration, can be dismissed or replayed from Settings.
+ * VoiceCommandTutorial - Compact, dismissible tutorial for first login.
+ * Auto-dismisses after timeout, swipeable on mobile, replayable from Settings.
  */
 import { useState, useEffect, useCallback } from "react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type PanInfo } from "framer-motion";
 import { X, ChevronRight, ChevronLeft, Volume2, Mic } from "lucide-react";
 
 interface TutorialStep {
@@ -16,18 +16,16 @@ interface TutorialStep {
 
 const STEPS: TutorialStep[] = [
   {
-    titleEn: "Navigation Commands",
-    titleUr: "نیویگیشن کمانڈز",
+    titleEn: "Navigation",
+    titleUr: "نیویگیشن",
     icon: "🧭",
     commands: [
       { en: "\"Open reminders\" — go to reminders", ur: "\"یاد دہانیاں کھولو\" — یاد دہانیاں" },
       { en: "\"Go to contacts\" — open contacts", ur: "\"رابطے کھولو\" — رابطے کھولیں" },
-      { en: "\"Open messages\" — messaging page", ur: "\"پیغامات کھولو\" — پیغامات" },
-      { en: "\"Open notes\" — go to notes", ur: "\"نوٹس کھولو\" — نوٹس" },
     ],
   },
   {
-    titleEn: "Calling & Messaging",
+    titleEn: "Calls & Messages",
     titleUr: "کال اور پیغامات",
     icon: "📞",
     commands: [
@@ -36,35 +34,18 @@ const STEPS: TutorialStep[] = [
     ],
   },
   {
-    titleEn: "Reminders & Notes",
-    titleUr: "یاد دہانیاں اور نوٹس",
-    icon: "🔔",
-    commands: [
-      { en: "\"Remind me to take medicine\" — new reminder", ur: "\"دوائی کی یاد دلاؤ\" — نئی یاد دہانی" },
-      { en: "In Notes: speak and it auto-types", ur: "نوٹس میں: بولیں اور خودکار ٹائپ ہوگا" },
-    ],
-  },
-  {
-    titleEn: "Emergency & Navigation",
-    titleUr: "ایمرجنسی اور نقشے",
+    titleEn: "Emergency & Help",
+    titleUr: "ایمرجنسی اور مدد",
     icon: "🆘",
     commands: [
       { en: "\"Emergency\" or \"Help\" — instant SOS", ur: "\"ایمرجنسی\" یا \"مدد\" — فوری SOS" },
-      { en: "\"Navigate to hospital\" — map directions", ur: "\"ہسپتال لے چلو\" — نقشے کی ہدایات" },
-    ],
-  },
-  {
-    titleEn: "You're Ready!",
-    titleUr: "آپ تیار ہیں!",
-    icon: "✅",
-    commands: [
-      { en: "SOFI is always listening — just speak!", ur: "سوفی ہمیشہ سن رہی ہے — بس بولیں!" },
-      { en: "Tap the mic icon to check status", ur: "مائیک آئیکن ٹیپ کریں" },
+      { en: "\"Navigate to hospital\" — directions", ur: "\"ہسپتال لے چلو\" — ہدایات" },
     ],
   },
 ];
 
 const STORAGE_KEY = "sofi_tutorial_completed";
+const AUTO_DISMISS_MS = 30000; // 30s auto-dismiss
 
 interface Props {
   forceShow?: boolean;
@@ -91,9 +72,15 @@ const VoiceCommandTutorial = ({ forceShow = false, onClose }: Props) => {
     if (!visible) return;
     const s = STEPS[step];
     const title = language === "ur" ? s.titleUr : s.titleEn;
-    const cmds = s.commands.map(c => language === "ur" ? c.ur : c.en).join(". ");
-    speak(`${title}. ${cmds}`);
+    speak(title);
   }, [step, visible, language]);
+
+  // Auto-dismiss timer
+  useEffect(() => {
+    if (!visible) return;
+    const timer = setTimeout(() => close(), AUTO_DISMISS_MS);
+    return () => clearTimeout(timer);
+  }, [visible]);
 
   const close = useCallback(() => {
     setVisible(false);
@@ -110,6 +97,12 @@ const VoiceCommandTutorial = ({ forceShow = false, onClose }: Props) => {
     if (step > 0) setStep(step - 1);
   };
 
+  const handleDragEnd = (_: any, info: PanInfo) => {
+    if (info.offset.x < -50) next();
+    else if (info.offset.x > 50) prev();
+    else if (info.offset.y > 80) close();
+  };
+
   if (!visible) return null;
 
   const current = STEPS[step];
@@ -120,75 +113,82 @@ const VoiceCommandTutorial = ({ forceShow = false, onClose }: Props) => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm p-3"
+        onClick={(e) => { if (e.target === e.currentTarget) close(); }}
         role="dialog"
         aria-modal="true"
         aria-label={t("Voice Command Tutorial", "آواز کمانڈ ٹیوٹوریل")}
       >
         <motion.div
-          initial={{ y: 100, opacity: 0 }}
+          initial={{ y: 120, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          className="w-full max-w-md bg-card rounded-3xl shadow-2xl overflow-hidden border border-border"
+          exit={{ y: 120, opacity: 0 }}
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          onDragEnd={handleDragEnd}
+          className="w-full max-w-md bg-card rounded-2xl shadow-2xl overflow-hidden border border-border mb-16 sm:mb-4 touch-pan-y"
         >
+          {/* Drag handle for mobile */}
+          <div className="flex justify-center pt-2 pb-1">
+            <div className="w-8 h-1 bg-muted-foreground/30 rounded-full" />
+          </div>
+
           {/* Header */}
-          <div className="flex items-center justify-between px-5 pt-5 pb-2">
+          <div className="flex items-center justify-between px-4 pb-1">
             <div className="flex items-center gap-2">
-              <Mic className="w-5 h-5 text-primary" aria-hidden="true" />
-              <span className="text-sm font-medium text-muted-foreground">
-                {step + 1} / {STEPS.length}
+              <Mic className="w-4 h-4 text-primary" aria-hidden="true" />
+              <span className="text-xs font-medium text-muted-foreground">
+                {step + 1}/{STEPS.length}
               </span>
             </div>
             <button
               onClick={close}
-              className="min-h-touch min-w-touch flex items-center justify-center rounded-full hover:bg-secondary"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full hover:bg-secondary"
               aria-label={t("Skip tutorial", "ٹیوٹوریل چھوڑیں")}
             >
-              <X className="w-5 h-5 text-muted-foreground" />
+              <X className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
 
           {/* Content */}
-          <div className="px-5 pb-3">
-            <div className="text-center mb-4">
-              <span className="text-4xl" aria-hidden="true">{current.icon}</span>
-              <h2 className="text-xl font-bold text-foreground mt-2">
+          <div className="px-4 pb-2">
+            <div className="text-center mb-3">
+              <span className="text-3xl" aria-hidden="true">{current.icon}</span>
+              <h2 className="text-lg font-bold text-foreground mt-1">
                 {language === "ur" ? current.titleUr : current.titleEn}
               </h2>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {current.commands.map((cmd, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-3 p-3 rounded-2xl bg-secondary/50 border border-border"
-                >
-                  <Volume2 className="w-4 h-4 text-primary mt-0.5 shrink-0" aria-hidden="true" />
-                  <div className="text-sm">
+                <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-secondary/50 border border-border">
+                  <Volume2 className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" aria-hidden="true" />
+                  <div className="text-xs">
                     <p className="text-foreground font-medium">{cmd.en}</p>
-                    <p className="text-muted-foreground text-xs mt-0.5" dir="rtl">{cmd.ur}</p>
+                    <p className="text-muted-foreground mt-0.5" dir="rtl">{cmd.ur}</p>
                   </div>
                 </div>
               ))}
             </div>
+
+            {/* Swipe hint on mobile */}
+            <p className="text-center text-[10px] text-muted-foreground mt-2 sm:hidden">
+              {t("Swipe left/right or drag down to dismiss", "بائیں/دائیں سوائپ یا نیچے کھینچیں")}
+            </p>
           </div>
 
-          {/* Progress bar */}
-          <div className="px-5 pb-2">
+          {/* Progress + Nav */}
+          <div className="px-4 pb-1">
             <div className="h-1 bg-secondary rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-300"
-                style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
-              />
+              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
             </div>
           </div>
 
-          {/* Navigation */}
-          <div className="flex gap-3 px-5 pb-5 pt-2">
+          <div className="flex gap-2 px-4 pb-4 pt-2">
             <button
               onClick={prev}
               disabled={step === 0}
-              className="flex-1 min-h-touch rounded-2xl border border-border bg-secondary text-foreground font-medium text-sm flex items-center justify-center gap-1 disabled:opacity-30"
+              className="flex-1 min-h-[44px] rounded-xl border border-border bg-secondary text-foreground font-medium text-sm flex items-center justify-center gap-1 disabled:opacity-30"
               aria-label={t("Previous", "پچھلا")}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -196,10 +196,10 @@ const VoiceCommandTutorial = ({ forceShow = false, onClose }: Props) => {
             </button>
             <button
               onClick={next}
-              className="flex-1 min-h-touch rounded-2xl bg-primary text-primary-foreground font-medium text-sm flex items-center justify-center gap-1"
+              className="flex-1 min-h-[44px] rounded-xl bg-primary text-primary-foreground font-medium text-sm flex items-center justify-center gap-1"
               aria-label={step < STEPS.length - 1 ? t("Next", "اگلا") : t("Get Started", "شروع کریں")}
             >
-              {step < STEPS.length - 1 ? t("Next", "اگلا") : t("Get Started", "شروع کریں")}
+              {step < STEPS.length - 1 ? t("Next", "اگلا") : t("Start", "شروع")}
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -210,3 +210,5 @@ const VoiceCommandTutorial = ({ forceShow = false, onClose }: Props) => {
 };
 
 export default VoiceCommandTutorial;
+
+export const resetTutorial = () => localStorage.removeItem(STORAGE_KEY);

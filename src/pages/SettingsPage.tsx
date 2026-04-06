@@ -5,9 +5,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePageAnnounce } from "@/hooks/usePageAnnounce";
 import {
-  ArrowLeft, Globe, Type, Sun, Moon, Volume2, Mic, MicOff, LogOut, User, Shield, Navigation
+  ArrowLeft, Globe, Type, Sun, Moon, Volume2, Mic, MicOff, LogOut, User, Shield, Navigation, BookOpen
 } from "lucide-react";
 import { toast } from "sonner";
+import VoiceDiagnosticsPanel from "@/components/VoiceDiagnosticsPanel";
+import VoiceCommandTutorial, { resetTutorial } from "@/components/VoiceCommandTutorial";
 
 const SettingsPage = () => {
   const navigate = useNavigate();
@@ -18,6 +20,7 @@ const SettingsPage = () => {
   const { signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [privacyMode, setPrivacyMode] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   usePageAnnounce("Settings", "ترتیبات");
 
@@ -196,6 +199,24 @@ const SettingsPage = () => {
           </div>
           <ToggleSwitch active={privacyMode} onToggle={togglePrivacyMode} label={t("Toggle privacy mode", "رازداری موڈ ٹوگل")} />
         </div>
+
+        {/* Voice Diagnostics */}
+        <VoiceDiagnosticsPanel />
+
+        {/* Replay Tutorial */}
+        <button
+          onClick={() => { resetTutorial(); setShowTutorial(true); }}
+          className="w-full p-4 rounded-2xl bg-card shadow-card flex items-center gap-3 min-h-touch hover:bg-secondary/50 transition-colors"
+          aria-label={t("Replay voice command tutorial", "آواز کمانڈ ٹیوٹوریل دوبارہ چلائیں")}
+        >
+          <BookOpen className="w-5 h-5 text-primary" aria-hidden="true" />
+          <div className="text-left">
+            <p className="font-semibold text-foreground text-sm">{t("Replay Tutorial", "ٹیوٹوریل دوبارہ")}</p>
+            <p className="text-xs text-muted-foreground">{t("Learn voice commands again", "آواز کمانڈ دوبارہ سیکھیں")}</p>
+          </div>
+        </button>
+
+        {showTutorial && <VoiceCommandTutorial forceShow onClose={() => setShowTutorial(false)} />}
 
         {/* Profile */}
         <div className="p-4 rounded-2xl bg-card shadow-card" role="region" aria-label="Profile information">
