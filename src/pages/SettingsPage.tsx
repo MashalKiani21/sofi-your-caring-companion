@@ -20,6 +20,7 @@ const SettingsPage = () => {
   const { signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [privacyMode, setPrivacyMode] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   usePageAnnounce("Settings", "ترتیبات");
 
