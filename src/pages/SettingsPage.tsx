@@ -200,6 +200,24 @@ const SettingsPage = () => {
           <ToggleSwitch active={privacyMode} onToggle={togglePrivacyMode} label={t("Toggle privacy mode", "رازداری موڈ ٹوگل")} />
         </div>
 
+        {/* Voice Diagnostics */}
+        <VoiceDiagnosticsPanel />
+
+        {/* Replay Tutorial */}
+        <button
+          onClick={() => { resetTutorial(); setShowTutorial(true); }}
+          className="w-full p-4 rounded-2xl bg-card shadow-card flex items-center gap-3 min-h-touch hover:bg-secondary/50 transition-colors"
+          aria-label={t("Replay voice command tutorial", "آواز کمانڈ ٹیوٹوریل دوبارہ چلائیں")}
+        >
+          <BookOpen className="w-5 h-5 text-primary" aria-hidden="true" />
+          <div className="text-left">
+            <p className="font-semibold text-foreground text-sm">{t("Replay Tutorial", "ٹیوٹوریل دوبارہ")}</p>
+            <p className="text-xs text-muted-foreground">{t("Learn voice commands again", "آواز کمانڈ دوبارہ سیکھیں")}</p>
+          </div>
+        </button>
+
+        {showTutorial && <VoiceCommandTutorial forceShow onClose={() => setShowTutorial(false)} />}
+
         {/* Profile */}
         <div className="p-4 rounded-2xl bg-card shadow-card" role="region" aria-label="Profile information">
           <div className="flex items-center gap-3 mb-2">
