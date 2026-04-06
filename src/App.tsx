@@ -24,6 +24,7 @@ import SettingsPage from "./pages/SettingsPage";
 import ResetPassword from "./pages/ResetPassword";
 import EmergencyPage from "./pages/EmergencyPage";
 import NavigationPage from "./pages/NavigationPage";
+import InstallPage from "./pages/InstallPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
